@@ -117,6 +117,7 @@ dependencies {
 
     // Splash Screen
     implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("androidx.webkit:webkit:1.9.0")
 
     // Testing
     testImplementation("junit:junit:4.13.2")
