@@ -109,9 +109,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.0.0")
 
     // Markdown rendering for AI responses
-    implementation("io.noties.markwon:core:4.6.2")
-    implementation("io.noties.markwon:syntax-highlight:4.6.2")
-    implementation("io.github.jeziellago:compose-markdown:0.4.1")
+    implementation("com.github.jeziellago:compose-markdown:0.5.4")
 
     // Lifecycle ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
