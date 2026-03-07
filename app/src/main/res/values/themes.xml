@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.CodeMasterAIStudio" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
-    <style name="Theme.CodeMasterAIStudio.SplashScreen" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">#0D1117</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
-        <item name="postSplashScreenTheme">@style/Theme.CodeMasterAIStudio</item>
+    <style name="Theme.CodeMasterAIStudio" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.CodeMasterAIStudio.SplashScreen" parent="Theme.CodeMasterAIStudio">
+        <item name="android:windowBackground">#0D1117</item>
     </style>
 </resources>
