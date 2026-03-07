@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.CodeMasterAIStudio" parent="Theme.Material3.DayNight.NoActionBar" />
+    <style name="Theme.CodeMasterAIStudio" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
     <style name="Theme.CodeMasterAIStudio.SplashScreen" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#0D1117</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
