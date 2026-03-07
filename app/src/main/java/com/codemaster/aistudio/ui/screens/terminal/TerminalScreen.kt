@@ -38,6 +38,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 // ─── Terminal Colors ───────────────────────────────────────────
 private val TermBg = Color(0xFF0C0C0C)
@@ -397,7 +404,7 @@ fun TerminalScreen(
                 contentPadding = PaddingValues(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                items(uiState.lines) { line ->
+                items(items = uiState.lines) { line ->
                     TerminalLineView(line)
                 }
             }
