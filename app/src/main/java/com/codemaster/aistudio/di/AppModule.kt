@@ -42,9 +42,4 @@ object AppModule {
         settingsRepository: SettingsRepository
     ): GitHubActionsRepository = GitHubActionsRepository(context, settingsRepository)
 
-    @Provides
-    @Singleton
-    fun provideAiRepository(
-        settingsRepository: SettingsRepository
-    ): AiRepository = AiRepository(settingsRepository)
 }
