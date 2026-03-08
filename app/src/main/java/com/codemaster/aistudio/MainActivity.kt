@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.codemaster.aistudio.ui.navigation.CodeMasterNavGraph
+import com.codemaster.aistudio.ui.navigation.NavGraph
 import com.codemaster.aistudio.ui.theme.CodeMasterTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -21,7 +21,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             CodeMasterTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    CodeMasterNavGraph()
+                    NavGraph()
                 }
             }
         }
