@@ -2,12 +2,10 @@ package com.codemaster.aistudio.data.repository
 
 import android.content.Context
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
+import com.codemaster.aistudio.data.model.AiProvider
+import com.codemaster.aistudio.data.model.AppSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -15,81 +13,61 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "codemaster_settings")
 
 @Singleton
 class SettingsRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private val dataStore = context.dataStore
-
-    companion object {
+    private object Keys {
         val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
         val KIMI_API_KEY = stringPreferencesKey("kimi_api_key")
-        val GITHUB_TOKEN = stringPreferencesKey("github_token")
-        val GITHUB_REPO = stringPreferencesKey("github_repo")
+        val DEFAULT_PROVIDER = stringPreferencesKey("default_provider")
         val DARK_THEME = booleanPreferencesKey("dark_theme")
         val FONT_SIZE = intPreferencesKey("font_size")
-        val AI_PROVIDER = stringPreferencesKey("ai_provider") // "gemini" or "kimi"
-        val EDITOR_WORD_WRAP = booleanPreferencesKey("editor_word_wrap")
+        val SANDBOX_MODE = booleanPreferencesKey("sandbox_mode")
+        val AUTO_SAVE = booleanPreferencesKey("auto_save")
     }
 
-    // ─── Getters ───────────────────────────────────────────────
-
-    suspend fun getGeminiApiKey(): String =
-        dataStore.data.first()[GEMINI_API_KEY] ?: ""
-
-    suspend fun getKimiApiKey(): String =
-        dataStore.data.first()[KIMI_API_KEY] ?: ""
-
-    suspend fun getGitHubToken(): String =
-        dataStore.data.first()[GITHUB_TOKEN] ?: ""
-
-    suspend fun getGitHubRepo(): String =
-        dataStore.data.first()[GITHUB_REPO] ?: ""
-
-    suspend fun isDarkTheme(): Boolean =
-        dataStore.data.first()[DARK_THEME] ?: true
-
-    suspend fun getFontSize(): Int =
-        dataStore.data.first()[FONT_SIZE] ?: 14
-
-    suspend fun getAiProvider(): String =
-        dataStore.data.first()[AI_PROVIDER] ?: "gemini"
-
-    // ─── Flows (for reactive UI) ───────────────────────────────
-
-    val darkThemeFlow: Flow<Boolean> = dataStore.data.map { it[DARK_THEME] ?: true }
-    val fontSizeFlow: Flow<Int> = dataStore.data.map { it[FONT_SIZE] ?: 14 }
-    val aiProviderFlow: Flow<String> = dataStore.data.map { it[AI_PROVIDER] ?: "gemini" }
-
-    // ─── Setters ───────────────────────────────────────────────
-
-    suspend fun saveGeminiApiKey(key: String) {
-        dataStore.edit { it[GEMINI_API_KEY] = key }
+    val settingsFlow: Flow<AppSettings> = context.dataStore.data.map { prefs ->
+        AppSettings(
+            geminiApiKey = prefs[Keys.GEMINI_API_KEY] ?: "",
+            kimiApiKey = prefs[Keys.KIMI_API_KEY] ?: "",
+            defaultProvider = AiProvider.valueOf(prefs[Keys.DEFAULT_PROVIDER] ?: AiProvider.GEMINI.name),
+            darkTheme = prefs[Keys.DARK_THEME] ?: true,
+            fontSize = prefs[Keys.FONT_SIZE] ?: 14,
+            sandboxMode = prefs[Keys.SANDBOX_MODE] ?: true,
+            autoSave = prefs[Keys.AUTO_SAVE] ?: true
+        )
     }
 
-    suspend fun saveKimiApiKey(key: String) {
-        dataStore.edit { it[KIMI_API_KEY] = key }
+    suspend fun getSettings(): AppSettings = settingsFlow.first()
+
+    suspend fun updateGeminiKey(key: String) {
+        context.dataStore.edit { it[Keys.GEMINI_API_KEY] = key }
     }
 
-    suspend fun saveGitHubToken(token: String) {
-        dataStore.edit { it[GITHUB_TOKEN] = token }
+    suspend fun updateKimiKey(key: String) {
+        context.dataStore.edit { it[Keys.KIMI_API_KEY] = key }
     }
 
-    suspend fun saveGitHubRepo(repo: String) {
-        dataStore.edit { it[GITHUB_REPO] = repo }
+    suspend fun updateDefaultProvider(provider: AiProvider) {
+        context.dataStore.edit { it[Keys.DEFAULT_PROVIDER] = provider.name }
     }
 
-    suspend fun setDarkTheme(enabled: Boolean) {
-        dataStore.edit { it[DARK_THEME] = enabled }
+    suspend fun updateDarkTheme(dark: Boolean) {
+        context.dataStore.edit { it[Keys.DARK_THEME] = dark }
     }
 
-    suspend fun setFontSize(size: Int) {
-        dataStore.edit { it[FONT_SIZE] = size }
+    suspend fun updateFontSize(size: Int) {
+        context.dataStore.edit { it[Keys.FONT_SIZE] = size }
     }
 
-    suspend fun setAiProvider(provider: String) {
-        dataStore.edit { it[AI_PROVIDER] = provider }
+    suspend fun updateSandboxMode(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SANDBOX_MODE] = enabled }
+    }
+
+    suspend fun updateAutoSave(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUTO_SAVE] = enabled }
     }
 }

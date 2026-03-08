@@ -2,157 +2,125 @@ package com.codemaster.aistudio.ui.screens.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.codemaster.aistudio.data.CodeMasterDatabase
+import com.codemaster.aistudio.data.model.AiProvider
+import com.codemaster.aistudio.data.model.ChatMessage
+import com.codemaster.aistudio.data.model.MessageRole
+import com.codemaster.aistudio.data.repository.AiRepository
+import com.codemaster.aistudio.data.repository.AiResult
 import com.codemaster.aistudio.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.net.HttpURLConnection
-import java.net.URL
 import javax.inject.Inject
-
-enum class MessageRole { USER, ASSISTANT, SYSTEM }
-
-data class ChatMessage(
-    val id: String = java.util.UUID.randomUUID().toString(),
-    val role: MessageRole,
-    val content: String,
-    val timestamp: Long = System.currentTimeMillis(),
-    val isError: Boolean = false
-)
 
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
-    val input: String = "",
+    val inputText: String = "",
     val isLoading: Boolean = false,
-    val aiProvider: String = "gemini",
-    val projectContext: String = "",
-    val currentFile: String = "",
-    val currentCode: String = ""
+    val selectedProvider: AiProvider = AiProvider.GEMINI,
+    val errorMessage: String? = null,
+    val projectId: String = ""
 )
-
-object GeminiApi {
-    suspend fun sendMessage(apiKey: String, messages: List<ChatMessage>, systemPrompt: String): String =
-        withContext(Dispatchers.IO) {
-            val url = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.doOutput = true
-            val contents = JSONArray()
-            if (systemPrompt.isNotBlank()) {
-                contents.put(JSONObject().apply { put("role", "user"); put("parts", JSONArray().put(JSONObject().apply { put("text", systemPrompt) })) })
-                contents.put(JSONObject().apply { put("role", "model"); put("parts", JSONArray().put(JSONObject().apply { put("text", "Understood.") })) })
-            }
-            messages.forEach { msg ->
-                if (msg.role != MessageRole.SYSTEM) {
-                    contents.put(JSONObject().apply {
-                        put("role", if (msg.role == MessageRole.USER) "user" else "model")
-                        put("parts", JSONArray().put(JSONObject().apply { put("text", msg.content) }))
-                    })
-                }
-            }
-            val body = JSONObject().apply { put("contents", contents); put("generationConfig", JSONObject().apply { put("temperature", 0.7); put("maxOutputTokens", 2048) }) }.toString()
-            conn.outputStream.write(body.toByteArray())
-            val response = BufferedReader(InputStreamReader(conn.inputStream)).readText()
-            conn.disconnect()
-            JSONObject(response).getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text")
-        }
-}
-
-object KimiApi {
-    suspend fun sendMessage(apiKey: String, messages: List<ChatMessage>, systemPrompt: String): String =
-        withContext(Dispatchers.IO) {
-            val url = URL("https://api.moonshot.cn/v1/chat/completions")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.setRequestProperty("Authorization", "Bearer $apiKey")
-            conn.doOutput = true
-            val msgs = JSONArray()
-            if (systemPrompt.isNotBlank()) msgs.put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
-            messages.forEach { msg ->
-                if (msg.role != MessageRole.SYSTEM) msgs.put(JSONObject().apply { put("role", if (msg.role == MessageRole.USER) "user" else "assistant"); put("content", msg.content) })
-            }
-            val body = JSONObject().apply { put("model", "moonshot-v1-8k"); put("messages", msgs); put("temperature", 0.7) }.toString()
-            conn.outputStream.write(body.toByteArray())
-            val response = BufferedReader(InputStreamReader(conn.inputStream)).readText()
-            conn.disconnect()
-            JSONObject(response).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
-        }
-}
 
 @HiltViewModel
 class AiChatViewModel @Inject constructor(
-    private val settingsRepository: SettingsRepository
+    private val aiRepository: AiRepository,
+    private val settingsRepository: SettingsRepository,
+    private val db: CodeMasterDatabase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
-    private val projectHistories = mutableMapOf<String, MutableList<ChatMessage>>()
 
-    init {
+    fun init(projectId: String) {
+        _uiState.update { it.copy(projectId = projectId) }
+        // Load settings for default provider
         viewModelScope.launch {
-            _uiState.update { it.copy(aiProvider = settingsRepository.getAiProvider()) }
+            val settings = settingsRepository.getSettings()
+            _uiState.update { it.copy(selectedProvider = settings.defaultProvider) }
+        }
+        // Observe messages for project
+        viewModelScope.launch {
+            db.chatMessageDao().getMessagesForProject(projectId).collect { messages ->
+                _uiState.update { it.copy(messages = messages) }
+            }
         }
     }
 
-    fun initWithProject(projectPath: String, fileName: String = "", code: String = "") {
-        val history = projectHistories.getOrPut(projectPath) { mutableListOf() }
-        _uiState.update { it.copy(messages = history.toList(), projectContext = projectPath, currentFile = fileName, currentCode = code) }
+    fun updateInput(text: String) {
+        _uiState.update { it.copy(inputText = text) }
     }
 
-    fun updateInput(text: String) { _uiState.update { it.copy(input = text) } }
-
-    fun switchProvider(provider: String) {
-        _uiState.update { it.copy(aiProvider = provider) }
-        viewModelScope.launch { settingsRepository.setAiProvider(provider) }
+    fun switchProvider(provider: AiProvider) {
+        _uiState.update { it.copy(selectedProvider = provider) }
     }
 
-    fun sendMessage(onInsertCode: ((String) -> Unit)? = null) {
+    fun sendMessage() {
         val state = _uiState.value
-        val input = state.input.trim()
-        if (input.isBlank() || state.isLoading) return
-        val userMsg = ChatMessage(role = MessageRole.USER, content = input)
-        val updatedMessages = state.messages + userMsg
-        projectHistories[state.projectContext]?.add(userMsg)
-        _uiState.update { it.copy(messages = updatedMessages, input = "", isLoading = true) }
+        val text = state.inputText.trim()
+        if (text.isBlank() || state.isLoading) return
+
         viewModelScope.launch {
-            try {
-                val geminiKey = settingsRepository.getGeminiApiKey()
-                val kimiKey = settingsRepository.getKimiApiKey()
-                val systemPrompt = buildString {
-                    append("You are an expert coding assistant inside CodeMaster AI Studio. ")
-                    if (state.projectContext.isNotBlank()) append("Project: ${state.projectContext}. ")
-                    if (state.currentFile.isNotBlank()) append("File: ${state.currentFile}. ")
-                    if (state.currentCode.isNotBlank()) append("Current code:\n${state.currentCode.take(2000)}")
+            // Save user message
+            val userMsg = ChatMessage(
+                projectId = state.projectId,
+                role = MessageRole.USER,
+                content = text,
+                provider = state.selectedProvider
+            )
+            db.chatMessageDao().insertMessage(userMsg)
+            _uiState.update { it.copy(inputText = "", isLoading = true, errorMessage = null) }
+
+            // Call AI
+            val result = aiRepository.sendMessage(
+                userMessage = text,
+                history = state.messages,
+                provider = state.selectedProvider
+            )
+
+            when (result) {
+                is AiResult.Success -> {
+                    val aiMsg = ChatMessage(
+                        projectId = state.projectId,
+                        role = MessageRole.ASSISTANT,
+                        content = result.content,
+                        provider = state.selectedProvider,
+                        hasCodeBlock = result.content.contains("```")
+                    )
+                    db.chatMessageDao().insertMessage(aiMsg)
+                    _uiState.update { it.copy(isLoading = false) }
                 }
-                val response = when (state.aiProvider) {
-                    "kimi" -> KimiApi.sendMessage(kimiKey, updatedMessages, systemPrompt)
-                    else   -> GeminiApi.sendMessage(geminiKey, updatedMessages, systemPrompt)
+                is AiResult.Error -> {
+                    val errMsg = ChatMessage(
+                        projectId = state.projectId,
+                        role = MessageRole.ASSISTANT,
+                        content = result.message,
+                        provider = state.selectedProvider,
+                        isError = true
+                    )
+                    db.chatMessageDao().insertMessage(errMsg)
+                    _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
                 }
-                val aiMsg = ChatMessage(role = MessageRole.ASSISTANT, content = response)
-                projectHistories[state.projectContext]?.add(aiMsg)
-                _uiState.update { it.copy(messages = it.messages + aiMsg, isLoading = false) }
-                val codeBlock = Regex("""```(?:\w+)?\n([\s\S]*?)```""").find(response)?.groupValues?.get(1)
-                if (codeBlock != null) onInsertCode?.invoke(codeBlock)
-            } catch (e: Exception) {
-                val errMsg = ChatMessage(role = MessageRole.ASSISTANT, content = "Error: ${e.message}", isError = true)
-                _uiState.update { it.copy(messages = it.messages + errMsg, isLoading = false) }
+                else -> _uiState.update { it.copy(isLoading = false) }
             }
         }
     }
 
     fun clearHistory() {
-        projectHistories[_uiState.value.projectContext]?.clear()
-        _uiState.update { it.copy(messages = emptyList()) }
+        viewModelScope.launch {
+            db.chatMessageDao().clearProjectHistory(_uiState.value.projectId)
+        }
+    }
+
+    // Quick prompt shortcuts
+    fun sendQuickPrompt(prompt: String) {
+        _uiState.update { it.copy(inputText = prompt) }
+        sendMessage()
     }
 }

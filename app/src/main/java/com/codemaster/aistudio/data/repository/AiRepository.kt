@@ -40,9 +40,10 @@ class AiRepository @Inject constructor(
         history: List<ChatMessage>,
         provider: AiProvider
     ): AiResult = withContext(Dispatchers.IO) {
-                return@withContext when (provider) {
-            AiProvider.GEMINI -> sendToGemini(userMessage, history, settingsRepository.getGeminiApiKey())
-            AiProvider.KIMI -> sendToKimi(userMessage, history, settingsRepository.getKimiApiKey())
+        val settings = settingsRepository.getSettings()
+        return@withContext when (provider) {
+            AiProvider.GEMINI -> sendToGemini(userMessage, history, settings.geminiApiKey)
+            AiProvider.KIMI -> sendToKimi(userMessage, history, settings.kimiApiKey)
         }
     }
 
