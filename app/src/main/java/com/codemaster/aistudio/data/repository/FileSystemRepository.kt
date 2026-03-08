@@ -58,7 +58,7 @@ class FileSystemRepository @Inject constructor(
         dir
     }
 
-    private fun getBaseDir(): File {
+    private fun resolveBaseDir(): File {
         return if (android.os.Environment.getExternalStorageState() ==
             android.os.Environment.MEDIA_MOUNTED) {
             baseDir
@@ -75,7 +75,7 @@ class FileSystemRepository @Inject constructor(
         templateFiles: Map<String, String>
     ): FileResult<ProjectDirectory> = withContext(Dispatchers.IO) {
         try {
-            val projectDir = File(getBaseDir(), sanitizeName(name))
+            val projectDir = File(resolveBaseDir(), sanitizeName(name))
             if (projectDir.exists()) {
                 return@withContext FileResult.Error("Project '$name' already exists")
             }
@@ -116,7 +116,7 @@ class FileSystemRepository @Inject constructor(
 
     suspend fun listProjects(): FileResult<List<ProjectDirectory>> = withContext(Dispatchers.IO) {
         try {
-            val dirs = getBaseDir().listFiles { file ->
+            val dirs = resolveBaseDir().listFiles { file ->
                 file.isDirectory && !file.name.startsWith(".")
             } ?: emptyArray()
 
@@ -259,10 +259,10 @@ class FileSystemRepository @Inject constructor(
 
     // ─── Storage info ──────────────────────────────────────────
 
-    fun getBasePath(): String = getBaseDir().absolutePath
+    fun getBasePath(): String = resolveBaseDir().absolutePath
 
     suspend fun getStorageInfo(): Pair<Long, Long> = withContext(Dispatchers.IO) {
-        val dir = getBaseDir()
+        val dir = resolveBaseDir()
         val used = dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
         val free = dir.freeSpace
         Pair(used, free)
