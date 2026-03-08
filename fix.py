@@ -1,6 +1,15 @@
-with open('build.gradle.kts', 'r') as f:
+with open('app/src/main/java/com/codemaster/aistudio/ui/screens/chat/AiChatScreen.kt', 'r') as f:
     content = f.read()
-content = content.replace('hilt.android" version "2.50"', 'hilt.android" version "2.51.1"')
-with open('build.gradle.kts', 'w') as f:
-    f.write(content)
-print("Done:", content[content.find('hilt'):content.find('hilt')+60])
+
+# Find the start of the duplicate ViewModel class
+marker = '\n@HiltViewModel\nclass AiChatViewModel'
+idx = content.find(marker)
+if idx == -1:
+    print("Not found!")
+else:
+    # Trim everything from that point onward
+    content = content[:idx]
+    with open('app/src/main/java/com/codemaster/aistudio/ui/screens/chat/AiChatScreen.kt', 'w') as f:
+        f.write(content)
+    print(f"Removed duplicate at char {idx}")
+    print("Last 3 lines:", content.strip().splitlines()[-3:])
