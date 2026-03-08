@@ -28,8 +28,9 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+      - name: Build APK
+        run: ./gradlew clean assembleDebu
+
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
