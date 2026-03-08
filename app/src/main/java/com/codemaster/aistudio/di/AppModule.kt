@@ -20,7 +20,7 @@ object AppModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): CodeMasterDatabase {
-        return CodeMasterDatabase.getDatabase(context)
+        return androidx.room.Room.databaseBuilder(context, CodeMasterDatabase::class.java, CodeMasterDatabase.DATABASE_NAME).fallbackToDestructiveMigration().build()
     }
 
     @Provides

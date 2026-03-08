@@ -40,11 +40,6 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 // ─── Terminal Colors ───────────────────────────────────────────
 private val TermBg = Color(0xFF0C0C0C)
