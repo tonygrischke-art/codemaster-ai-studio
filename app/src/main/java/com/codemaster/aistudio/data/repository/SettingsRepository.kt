@@ -67,6 +67,22 @@ class SettingsRepository @Inject constructor(
         context.dataStore.edit { it[Keys.SANDBOX_MODE] = enabled }
     }
 
+    suspend fun getGitHubToken(): String {
+        return context.dataStore.data.first()[androidx.datastore.preferences.core.stringPreferencesKey("github_token")] ?: ""
+    }
+
+    suspend fun getGitHubRepo(): String {
+        return context.dataStore.data.first()[androidx.datastore.preferences.core.stringPreferencesKey("github_repo")] ?: ""
+    }
+
+    suspend fun saveGitHubToken(token: String) {
+        context.dataStore.edit { it[androidx.datastore.preferences.core.stringPreferencesKey("github_token")] = token }
+    }
+
+    suspend fun saveGitHubRepo(repo: String) {
+        context.dataStore.edit { it[androidx.datastore.preferences.core.stringPreferencesKey("github_repo")] = repo }
+    }
+
     suspend fun updateAutoSave(enabled: Boolean) {
         context.dataStore.edit { it[Keys.AUTO_SAVE] = enabled }
     }
