@@ -1,13 +1,12 @@
 package com.codemaster.aistudio.ui.screens.chat
 
-import androidx.compose.animation.*
-import androidx.compose.foundation.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -16,45 +15,304 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.codemaster.aistudio.data.model.AiProvider
-import com.codemaster.aistudio.data.model.ChatMessage
-import com.codemaster.aistudio.data.model.MessageRole
+import com.codemaster.aistudio.data.repository.FileResult
+import com.codemaster.aistudio.data.repository.SettingsRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
+import javax.inject.Inject
 
-// ─── Quick Prompt Templates ────────────────────────────────────
-private val QUICK_PROMPTS = listOf(
-    "🔧 Fix this error:" to "Fix this error:\n\n",
-    "✍️ Write code for:" to "Write a complete implementation for:\n\n",
-    "💡 Explain this:" to "Explain this code:\n\n```\n\n```",
-    "🔨 Build Gradle" to "Generate a working build.gradle.kts for an Android app with:",
-    "🐛 Debug crash:" to "Debug this Android crash log:\n\n"
+// ─── Message model ─────────────────────────────────────────────
+enum class MessageRole { USER, ASSISTANT, SYSTEM }
+
+data class ChatMessage(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val role: MessageRole,
+    val content: String,
+    val timestamp: Long = System.currentTimeMillis(),
+    val isError: Boolean = false
 )
 
+// ─── AI providers ──────────────────────────────────────────────
+object GeminiApi {
+    suspend fun sendMessage(
+        apiKey: String,
+        messages: List<ChatMessage>,
+        systemPrompt: String
+    ): String = withContext(Dispatchers.IO) {
+        val url = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.doOutput = true
+
+        // Build contents array
+        val contents = JSONArray()
+
+        // Add system prompt as first user message
+        if (systemPrompt.isNotBlank()) {
+            contents.put(JSONObject().apply {
+                put("role", "user")
+                put("parts", JSONArray().put(JSONObject().apply { put("text", systemPrompt) }))
+            })
+            contents.put(JSONObject().apply {
+                put("role", "model")
+                put("parts", JSONArray().put(JSONObject().apply { put("text", "Understood. I'm your AI coding assistant.") }))
+            })
+        }
+
+        messages.forEach { msg ->
+            if (msg.role != MessageRole.SYSTEM) {
+                contents.put(JSONObject().apply {
+                    put("role", if (msg.role == MessageRole.USER) "user" else "model")
+                    put("parts", JSONArray().put(JSONObject().apply { put("text", msg.content) }))
+                })
+            }
+        }
+
+        val body = JSONObject().apply {
+            put("contents", contents)
+            put("generationConfig", JSONObject().apply {
+                put("temperature", 0.7)
+                put("maxOutputTokens", 2048)
+            })
+        }.toString()
+
+        conn.outputStream.write(body.toByteArray())
+
+        val response = BufferedReader(InputStreamReader(conn.inputStream)).readText()
+        conn.disconnect()
+
+        val json = JSONObject(response)
+        json.getJSONArray("candidates")
+            .getJSONObject(0)
+            .getJSONObject("content")
+            .getJSONArray("parts")
+            .getJSONObject(0)
+            .getString("text")
+    }
+}
+
+object KimiApi {
+    suspend fun sendMessage(
+        apiKey: String,
+        messages: List<ChatMessage>,
+        systemPrompt: String
+    ): String = withContext(Dispatchers.IO) {
+        val url = URL("https://api.moonshot.cn/v1/chat/completions")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.setRequestProperty("Authorization", "Bearer $apiKey")
+        conn.doOutput = true
+
+        val msgs = JSONArray()
+        if (systemPrompt.isNotBlank()) {
+            msgs.put(JSONObject().apply {
+                put("role", "system")
+                put("content", systemPrompt)
+            })
+        }
+        messages.forEach { msg ->
+            if (msg.role != MessageRole.SYSTEM) {
+                msgs.put(JSONObject().apply {
+                    put("role", if (msg.role == MessageRole.USER) "user" else "assistant")
+                    put("content", msg.content)
+                })
+            }
+        }
+
+        val body = JSONObject().apply {
+            put("model", "moonshot-v1-8k")
+            put("messages", msgs)
+            put("temperature", 0.7)
+        }.toString()
+
+        conn.outputStream.write(body.toByteArray())
+
+        val response = BufferedReader(InputStreamReader(conn.inputStream)).readText()
+        conn.disconnect()
+
+        val json = JSONObject(response)
+        json.getJSONArray("choices")
+            .getJSONObject(0)
+            .getJSONObject("message")
+            .getString("content")
+    }
+}
+
+// ─── Chat ViewModel ────────────────────────────────────────────
+data class ChatUiState(
+    val messages: List<ChatMessage> = emptyList(),
+    val input: String = "",
+    val isLoading: Boolean = false,
+    val aiProvider: String = "gemini",
+    val projectContext: String = "",
+    val currentFile: String = "",
+    val currentCode: String = ""
+)
+
+@HiltViewModel
+class AiChatViewModel @Inject constructor(
+    private val settingsRepository: SettingsRepository
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(ChatUiState())
+    val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+
+    // Conversation histories keyed by projectPath
+    private val projectHistories = mutableMapOf<String, MutableList<ChatMessage>>()
+
+    init {
+        viewModelScope.launch {
+            val provider = settingsRepository.getAiProvider()
+            _uiState.update { it.copy(aiProvider = provider) }
+        }
+    }
+
+    fun initWithProject(projectPath: String, fileName: String = "", code: String = "") {
+        val history = projectHistories.getOrPut(projectPath) { mutableListOf() }
+        _uiState.update {
+            it.copy(
+                messages = history.toList(),
+                projectContext = projectPath,
+                currentFile = fileName,
+                currentCode = code
+            )
+        }
+    }
+
+    fun updateInput(text: String) {
+        _uiState.update { it.copy(input = text) }
+    }
+
+    fun sendMessage(onInsertCode: ((String) -> Unit)? = null) {
+        val state = _uiState.value
+        val input = state.input.trim()
+        if (input.isBlank() || state.isLoading) return
+
+        val userMsg = ChatMessage(role = MessageRole.USER, content = input)
+        val updatedMessages = state.messages + userMsg
+
+        projectHistories[state.projectContext]?.add(userMsg)
+
+        _uiState.update {
+            it.copy(messages = updatedMessages, input = "", isLoading = true)
+        }
+
+        viewModelScope.launch {
+            try {
+                val systemPrompt = buildSystemPrompt(state)
+                val apiKey: String
+                val response: String
+
+                if (state.aiProvider == "kimi") {
+                    apiKey = settingsRepository.getKimiApiKey()
+                    if (apiKey.isBlank()) throw Exception("Kimi API key not set in Settings")
+                    response = KimiApi.sendMessage(apiKey, updatedMessages, systemPrompt)
+                } else {
+                    apiKey = settingsRepository.getGeminiApiKey()
+                    if (apiKey.isBlank()) throw Exception("Gemini API key not set in Settings")
+                    response = GeminiApi.sendMessage(apiKey, updatedMessages, systemPrompt)
+                }
+
+                val assistantMsg = ChatMessage(role = MessageRole.ASSISTANT, content = response)
+                projectHistories[state.projectContext]?.add(assistantMsg)
+
+                _uiState.update { s ->
+                    s.copy(messages = s.messages + assistantMsg, isLoading = false)
+                }
+
+            } catch (e: Exception) {
+                val errorMsg = ChatMessage(
+                    role = MessageRole.ASSISTANT,
+                    content = "Error: ${e.message}",
+                    isError = true
+                )
+                _uiState.update { s ->
+                    s.copy(messages = s.messages + errorMsg, isLoading = false)
+                }
+            }
+        }
+    }
+
+    fun clearHistory() {
+        val state = _uiState.value
+        projectHistories[state.projectContext]?.clear()
+        _uiState.update { it.copy(messages = emptyList()) }
+    }
+
+    fun switchProvider(provider: String) {
+        viewModelScope.launch {
+            settingsRepository.setAiProvider(provider)
+            _uiState.update { it.copy(aiProvider = provider) }
+        }
+    }
+
+    // Extract code blocks from AI response
+    fun extractCodeBlocks(content: String): List<String> {
+        val regex = Regex("```(?:\\w+)?\\n([\\s\\S]*?)```")
+        return regex.findAll(content).map { it.groupValues[1].trim() }.toList()
+    }
+
+    private fun buildSystemPrompt(state: ChatUiState): String {
+        val sb = StringBuilder()
+        sb.append("You are an expert AI coding assistant inside CodeMaster AI Studio, an Android IDE app. ")
+        sb.append("Be concise, technical, and helpful. Format code with markdown code blocks (```language).\n\n")
+
+        if (state.projectContext.isNotBlank()) {
+            sb.append("Current project: ${state.projectContext}\n")
+        }
+        if (state.currentFile.isNotBlank()) {
+            sb.append("Current file: ${state.currentFile}\n")
+        }
+        if (state.currentCode.isNotBlank()) {
+            sb.append("Current code context:\n```\n${state.currentCode.take(2000)}\n```\n")
+        }
+        return sb.toString()
+    }
+}
+
+// ─── Chat Screen ───────────────────────────────────────────────
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiChatScreen(
-    projectId: String,
+    projectPath: String = "",
+    currentFile: String = "",
+    currentCode: String = "",
     onNavigateBack: () -> Unit,
-    onNavigateToEditor: (String) -> Unit,
+    onInsertCode: ((String) -> Unit)? = null,
     viewModel: AiChatViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
-    val clipboard = LocalClipboardManager.current
 
-    LaunchedEffect(projectId) {
-        viewModel.init(projectId)
+    LaunchedEffect(projectPath) {
+        viewModel.initWithProject(projectPath, currentFile, currentCode)
     }
 
-    // Auto-scroll to latest message
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) {
             listState.animateScrollToItem(uiState.messages.size - 1)
@@ -63,398 +321,144 @@ fun AiChatScreen(
 
     Scaffold(
         topBar = {
-            ChatTopBar(
-                selectedProvider = uiState.selectedProvider,
-                onSwitchProvider = viewModel::switchProvider,
-                onClearHistory = viewModel::clearHistory,
-                onNavigateBack = onNavigateBack
-            )
-        },
-        bottomBar = {
-            ChatInputBar(
-                inputText = uiState.inputText,
-                isLoading = uiState.isLoading,
-                onTextChange = viewModel::updateInput,
-                onSend = viewModel::sendMessage
+            TopAppBar(
+                title = {
+                    Column {
+                        Text("AI Chat", fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ProviderChip("Gemini", uiState.aiProvider == "gemini",
+                                Color(0xFF4285F4)) { viewModel.switchProvider("gemini") }
+                            ProviderChip("Kimi", uiState.aiProvider == "kimi",
+                                Color(0xFF1DB954)) { viewModel.switchProvider("kimi") }
+                        }
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    if (uiState.messages.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.clearHistory() }) {
+                            Icon(Icons.Default.DeleteOutline, contentDescription = "Clear chat")
+                        }
+                    }
+                }
             )
         }
-    ) { paddingValues ->
+    ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+            modifier = Modifier.fillMaxSize().padding(padding)
         ) {
-            // Quick prompt chips
-            QuickPromptRow(onPromptSelected = { viewModel.updateInput(it) })
+            // Context banner
+            if (currentFile.isNotBlank()) {
+                Surface(tonalElevation = 2.dp) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Code, contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.primary)
+                        Text("Context: $currentFile",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontFamily = FontFamily.Monospace)
+                    }
+                }
+            }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-
-            // Messages list
+            // Empty state
             if (uiState.messages.isEmpty()) {
-                WelcomeEmptyState(selectedProvider = uiState.selectedProvider)
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(32.dp)
+                    ) {
+                        Text("✨", fontSize = 48.sp)
+                        Text("Ask anything about your code",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold)
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(
+                                "Explain this code",
+                                "Fix the bug in my function",
+                                "Add error handling",
+                                "Write unit tests for this",
+                                "Optimize for performance"
+                            ).forEach { suggestion ->
+                                SuggestionChip(
+                                    onClick = {
+                                        viewModel.updateInput(suggestion)
+                                        viewModel.sendMessage(onInsertCode)
+                                    },
+                                    label = { Text(suggestion, fontSize = 12.sp) }
+                                )
+                            }
+                        }
+                    }
+                }
             } else {
+                // Message list
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(uiState.messages, key = { it.id }) { message ->
                         ChatMessageBubble(
                             message = message,
-                            onCopyCode = { code ->
-                                clipboard.setText(AnnotatedString(code))
-                            }
+                            onInsertCode = onInsertCode,
+                            onCopyCode = { /* handled in bubble */ },
+                            extractCodeBlocks = viewModel::extractCodeBlocks
                         )
                     }
+
                     if (uiState.isLoading) {
                         item {
-                            LoadingBubble(provider = uiState.selectedProvider)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(start = 8.dp)
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp)
+                                Text("Thinking...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
                 }
             }
-        }
-    }
-}
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ChatTopBar(
-    selectedProvider: AiProvider,
-    onSwitchProvider: (AiProvider) -> Unit,
-    onClearHistory: () -> Unit,
-    onNavigateBack: () -> Unit
-) {
-    var showMenu by remember { mutableStateOf(false) }
-
-    TopAppBar(
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("AI Chat", style = MaterialTheme.typography.titleLarge)
-                ProviderToggleChip(
-                    selectedProvider = selectedProvider,
-                    onSwitch = { onSwitchProvider(if (selectedProvider == AiProvider.GEMINI) AiProvider.KIMI else AiProvider.GEMINI) }
-                )
-            }
-        },
-        navigationIcon = {
-            IconButton(onClick = onNavigateBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-            }
-        },
-        actions = {
-            IconButton(onClick = { showMenu = true }) {
-                Icon(Icons.Default.MoreVert, contentDescription = "More")
-            }
-            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                DropdownMenuItem(
-                    text = { Text("Clear history") },
-                    onClick = { onClearHistory(); showMenu = false },
-                    leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) }
-                )
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    )
-}
-
-@Composable
-fun ProviderToggleChip(selectedProvider: AiProvider, onSwitch: () -> Unit) {
-    val isGemini = selectedProvider == AiProvider.GEMINI
-    AssistChip(
-        onClick = onSwitch,
-        label = {
-            Text(
-                text = if (isGemini) "Gemini" else "Kimi",
-                style = MaterialTheme.typography.labelSmall
-            )
-        },
-        colors = AssistChipDefaults.assistChipColors(
-            containerColor = if (isGemini)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.secondaryContainer
-        ),
-        modifier = Modifier.height(28.dp)
-    )
-}
-
-@Composable
-fun QuickPromptRow(onPromptSelected: (String) -> Unit) {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(QUICK_PROMPTS) { (label, prompt) ->
-            SuggestionChip(
-                onClick = { onPromptSelected(prompt) },
-                label = { Text(label, style = MaterialTheme.typography.labelSmall) }
-            )
-        }
-    }
-}
-
-@Composable
-fun ChatMessageBubble(
-    message: ChatMessage,
-    onCopyCode: (String) -> Unit
-) {
-    val isUser = message.role == MessageRole.USER
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
-    ) {
-        if (!isUser) {
-            // AI avatar
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (message.provider == AiProvider.GEMINI)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.secondary
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (message.provider == AiProvider.GEMINI) "G" else "K",
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelSmall
-                )
-            }
-            Spacer(Modifier.width(8.dp))
-        }
-
-        Column(modifier = Modifier.widthIn(max = 300.dp)) {
-            // Parse and render message content
-            if (!isUser && message.hasCodeBlock) {
-                MessageWithCodeBlocks(content = message.content, onCopyCode = onCopyCode, isError = message.isError)
-            } else {
-                Surface(
-                    shape = RoundedCornerShape(
-                        topStart = if (isUser) 16.dp else 4.dp,
-                        topEnd = if (isUser) 4.dp else 16.dp,
-                        bottomStart = 16.dp,
-                        bottomEnd = 16.dp
-                    ),
-                    color = when {
-                        isUser -> MaterialTheme.colorScheme.primary
-                        message.isError -> MaterialTheme.colorScheme.errorContainer
-                        else -> MaterialTheme.colorScheme.surfaceVariant
-                    }
-                ) {
-                    Text(
-                        text = message.content,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = when {
-                            isUser -> MaterialTheme.colorScheme.onPrimary
-                            message.isError -> MaterialTheme.colorScheme.onErrorContainer
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun MessageWithCodeBlocks(
-    content: String,
-    onCopyCode: (String) -> Unit,
-    isError: Boolean
-) {
-    // Simple parser: split on ```
-    val parts = content.split(Regex("```(\\w*)\n?"))
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        var isCode = false
-        var langHint = ""
-        parts.forEachIndexed { idx, part ->
-            if (idx == 0) {
-                // Leading text
-                if (part.isNotBlank()) {
-                    Surface(
-                        shape = RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp),
-                        color = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant
-                    ) {
-                        Text(
-                            text = part.trim(),
-                            modifier = Modifier.padding(12.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                isCode = false
-            } else if (!isCode) {
-                // This is the language hint between ```, next part is code
-                langHint = part.trim()
-                isCode = true
-            } else {
-                // Code block
-                CodeBlock(code = part.trimEnd(), language = langHint, onCopy = onCopyCode)
-                isCode = false
-            }
-        }
-    }
-}
-
-@Composable
-fun CodeBlock(code: String, language: String, onCopy: (String) -> Unit) {
-    var copied by remember { mutableStateOf(false) }
-
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = Color(0xFF161B22), // Always dark for code
-        border = BorderStroke(1.dp, Color(0xFF30363D))
-    ) {
-        Column {
-            // Code block header
+            // Input area
+            HorizontalDivider()
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = language.ifBlank { "code" },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF8B949E)
-                )
-                TextButton(
-                    onClick = {
-                        onCopy(code)
-                        copied = true
-                    },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Icon(
-                        if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
-                        contentDescription = "Copy",
-                        modifier = Modifier.size(14.dp),
-                        tint = if (copied) Color(0xFF3FB950) else Color(0xFF8B949E)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        if (copied) "Copied!" else "Copy",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (copied) Color(0xFF3FB950) else Color(0xFF8B949E)
-                    )
-                }
-            }
-            HorizontalDivider(color = Color(0xFF30363D))
-            // Code content
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
                     .padding(12.dp)
+                    .navigationBarsPadding()
+                    .imePadding(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Bottom
             ) {
-                Text(
-                    text = code,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    color = Color(0xFFE6EDF3),
-                    lineHeight = 18.sp
+                OutlinedTextField(
+                    value = uiState.input,
+                    onValueChange = viewModel::updateInput,
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Ask about your code...") },
+                    maxLines = 5,
+                    shape = RoundedCornerShape(24.dp)
                 )
-            }
-        }
-    }
-}
-
-@Composable
-fun LoadingBubble(provider: AiProvider) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(
-                    if (provider == AiProvider.GEMINI)
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.secondary
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = if (provider == AiProvider.GEMINI) "G" else "K",
-                color = Color.White,
-                style = MaterialTheme.typography.labelSmall
-            )
-        }
-        Surface(
-            shape = RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                Text(
-                    "Thinking...",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ChatInputBar(
-    inputText: String,
-    isLoading: Boolean,
-    onTextChange: (String) -> Unit,
-    onSend: () -> Unit
-) {
-    Surface(
-        tonalElevation = 4.dp,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-                .navigationBarsPadding()
-                .imePadding(),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            OutlinedTextField(
-                value = inputText,
-                onValueChange = onTextChange,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Ask AI to write, fix, or explain code...") },
-                minLines = 1,
-                maxLines = 6,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                    imeAction = ImeAction.Default
-                ),
-                shape = RoundedCornerShape(20.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                )
-            )
-            FilledIconButton(
-                onClick = onSend,
-                enabled = inputText.isNotBlank() && !isLoading,
-                modifier = Modifier.size(48.dp)
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                } else {
+                FilledIconButton(
+                    onClick = { viewModel.sendMessage(onInsertCode) },
+                    enabled = uiState.input.isNotBlank() && !uiState.isLoading
+                ) {
                     Icon(Icons.Default.Send, contentDescription = "Send")
                 }
             }
@@ -462,26 +466,125 @@ fun ChatInputBar(
     }
 }
 
+// ─── Message Bubble ────────────────────────────────────────────
 @Composable
-fun WelcomeEmptyState(selectedProvider: AiProvider) {
+fun ChatMessageBubble(
+    message: ChatMessage,
+    onInsertCode: ((String) -> Unit)?,
+    onCopyCode: (String) -> Unit,
+    extractCodeBlocks: (String) -> List<String>
+) {
+    val isUser = message.role == MessageRole.USER
+    val codeBlocks = if (!isUser) extractCodeBlocks(message.content) else emptyList()
+
     Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
-        Text("🤖", fontSize = 48.sp)
-        Spacer(Modifier.height(16.dp))
-        Text(
-            "Ask ${selectedProvider.displayName} anything",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Write code, fix bugs, explain concepts,\ngenerate Android projects, and more.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
+        if (isUser) {
+            // User bubble
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(18.dp, 4.dp, 18.dp, 18.dp))
+                    .background(MaterialTheme.colorScheme.primary)
+                    .padding(12.dp, 10.dp)
+            ) {
+                Text(message.content,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    style = MaterialTheme.typography.bodyMedium)
+            }
+        } else {
+            // AI bubble — render with code block detection
+            Card(
+                shape = RoundedCornerShape(4.dp, 18.dp, 18.dp, 18.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (message.isError)
+                        MaterialTheme.colorScheme.errorContainer
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(12.dp, 10.dp)) {
+                    SelectionContainer {
+                        RenderMessageContent(message.content)
+                    }
+
+                    // Code block action buttons
+                    if (codeBlocks.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            codeBlocks.take(1).forEach { code ->
+                                if (onInsertCode != null) {
+                                    OutlinedButton(
+                                        onClick = { onInsertCode(code) },
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                        modifier = Modifier.height(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Code, contentDescription = null,
+                                            modifier = Modifier.size(14.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Insert Code", fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
+}
+
+@Composable
+fun RenderMessageContent(content: String) {
+    // Simple code block renderer — splits on ``` markers
+    val parts = content.split(Regex("```(?:\\w+)?\\n|```"))
+    var isCode = false
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        parts.forEach { part ->
+            if (part.isNotBlank()) {
+                if (isCode) {
+                    // Code block
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF161B22))
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            part.trimEnd(),
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            color = Color(0xFFE6EDF3),
+                            lineHeight = 18.sp
+                        )
+                    }
+                } else {
+                    // Regular text
+                    Text(
+                        part.trim(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        lineHeight = 22.sp
+                    )
+                }
+            }
+            isCode = !isCode
+        }
+    }
+}
+
+@Composable
+fun ProviderChip(label: String, selected: Boolean, color: Color, onClick: () -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label, fontSize = 11.sp) },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = color.copy(alpha = 0.2f),
+            selectedLabelColor = color
+        ),
+        modifier = Modifier.height(24.dp)
+    )
 }

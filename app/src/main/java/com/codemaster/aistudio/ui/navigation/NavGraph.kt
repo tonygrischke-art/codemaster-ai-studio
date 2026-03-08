@@ -5,73 +5,113 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.codemaster.aistudio.ui.screens.build.BuildScreen
 import com.codemaster.aistudio.ui.screens.chat.AiChatScreen
 import com.codemaster.aistudio.ui.screens.editor.CodeEditorScreen
 import com.codemaster.aistudio.ui.screens.home.HomeScreen
 import com.codemaster.aistudio.ui.screens.settings.SettingsScreen
 import com.codemaster.aistudio.ui.screens.terminal.TerminalScreen
+import java.net.URLDecoder
+import java.net.URLEncoder
 
-sealed class Screen(val route: String) {
-    object Home : Screen("home")
-    object AiChat : Screen("ai_chat?projectId={projectId}") {
-        fun createRoute(projectId: String = "") = "ai_chat?projectId=$projectId"
-    }
-    object CodeEditor : Screen("editor/{projectId}") {
-        fun createRoute(projectId: String) = "editor/$projectId"
-    }
-    object Terminal : Screen("terminal/{projectId}") {
-        fun createRoute(projectId: String) = "terminal/$projectId"
-    }
-    object Settings : Screen("settings")
+// ─── Routes ───────────────────────────────────────────────────
+object Routes {
+    const val HOME = "home"
+    const val EDITOR = "editor/{projectPath}"
+    const val CHAT = "chat?projectPath={projectPath}&file={file}"
+    const val TERMINAL = "terminal/{projectPath}"
+    const val SETTINGS = "settings"
+    const val BUILD = "build"
+
+    fun editor(projectPath: String) = "editor/${URLEncoder.encode(projectPath, "UTF-8")}"
+    fun chat(projectPath: String = "", file: String = "") =
+        "chat?projectPath=${URLEncoder.encode(projectPath, "UTF-8")}&file=${URLEncoder.encode(file, "UTF-8")}"
+    fun terminal(projectPath: String) = "terminal/${URLEncoder.encode(projectPath, "UTF-8")}"
 }
 
 @Composable
-fun CodeMasterNavGraph(
+fun NavGraph(
     navController: NavHostController = rememberNavController()
 ) {
     NavHost(
         navController = navController,
-        startDestination = Screen.Home.route
+        startDestination = Routes.HOME
     ) {
-        composable(Screen.Home.route) {
+        // ─── Home ──────────────────────────────────────────────
+        composable(Routes.HOME) {
             HomeScreen(
-                onNavigateToChat = { navController.navigate(Screen.AiChat.createRoute()) },
-                onNavigateToEditor = { projectId ->
-                    navController.navigate(Screen.CodeEditor.createRoute(projectId))
+                onNavigateToChat = {
+                    navController.navigate(Routes.chat())
                 },
-                onNavigateToTerminal = { projectId ->
-                    navController.navigate(Screen.Terminal.createRoute(projectId))
+                onNavigateToEditor = { projectPath ->
+                    navController.navigate(Routes.editor(projectPath))
                 },
-                onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
-            )
-        }
-        composable(Screen.AiChat.route) { backStackEntry ->
-            val projectId = backStackEntry.arguments?.getString("projectId") ?: ""
-            AiChatScreen(
-                projectId = projectId,
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToEditor = { pid ->
-                    navController.navigate(Screen.CodeEditor.createRoute(pid))
+                onNavigateToTerminal = { projectPath ->
+                    navController.navigate(Routes.terminal(projectPath))
+                },
+                onNavigateToSettings = {
+                    navController.navigate(Routes.SETTINGS)
                 }
             )
         }
-        composable(Screen.CodeEditor.route) { backStackEntry ->
-            val projectId = backStackEntry.arguments?.getString("projectId") ?: ""
+
+        // ─── Editor ────────────────────────────────────────────
+        composable(Routes.EDITOR) { backStack ->
+            val projectPath = URLDecoder.decode(
+                backStack.arguments?.getString("projectPath") ?: "",
+                "UTF-8"
+            )
             CodeEditorScreen(
-                projectId = projectId,
+                projectId = projectPath,
                 onNavigateBack = { navController.popBackStack() },
-                onOpenChat = { navController.navigate(Screen.AiChat.createRoute(projectId)) }
+                onOpenChat = {
+                    navController.navigate(Routes.chat(projectPath))
+                }
             )
         }
-        composable(Screen.Terminal.route) { backStackEntry ->
-            val projectId = backStackEntry.arguments?.getString("projectId") ?: ""
-            TerminalScreen(
-                projectId = projectId,
+
+        // ─── AI Chat ───────────────────────────────────────────
+        composable(Routes.CHAT) { backStack ->
+            val projectPath = URLDecoder.decode(
+                backStack.arguments?.getString("projectPath") ?: "",
+                "UTF-8"
+            )
+            val file = URLDecoder.decode(
+                backStack.arguments?.getString("file") ?: "",
+                "UTF-8"
+            )
+            AiChatScreen(
+                projectPath = projectPath,
+                currentFile = file,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
-        composable(Screen.Settings.route) {
+
+        // ─── Terminal ──────────────────────────────────────────
+        composable(Routes.TERMINAL) { backStack ->
+            val projectPath = URLDecoder.decode(
+                backStack.arguments?.getString("projectPath") ?: "",
+                "UTF-8"
+            )
+            TerminalScreen(
+                projectId = projectPath,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // ─── Settings ──────────────────────────────────────────
+        composable(Routes.SETTINGS) {
             SettingsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToBuild = {
+                    navController.navigate(Routes.BUILD)
+                }
+            )
+        }
+
+        // ─── Build ─────────────────────────────────────────────
+        composable(Routes.BUILD) {
+            BuildScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
