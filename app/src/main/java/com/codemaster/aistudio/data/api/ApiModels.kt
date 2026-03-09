@@ -58,7 +58,7 @@ data class GeminiError(
 // ─── Kimi (Moonshot) API ───────────────────────────────────────
 // Kimi uses OpenAI-compatible chat completions format
 
-interface KimiApiService {
+interface GroqApiService {
     @POST("v1/chat/completions")
     suspend fun chatCompletions(
         @Body request: KimiRequest,
@@ -66,29 +66,29 @@ interface KimiApiService {
     ): KimiResponse
 }
 
-data class KimiRequest(
-    val model: String = "moonshot-v1-8k",
+data class GroqRequest(
+    val model: String = "llama-3.3-70b-versatile",
     val messages: List<KimiMessage>,
     val temperature: Float = 0.7f,
     @SerializedName("max_tokens") val maxTokens: Int = 8192
 )
 
-data class KimiMessage(
+data class GroqMessage(
     val role: String, // "system" | "user" | "assistant"
     val content: String
 )
 
-data class KimiResponse(
+data class GroqResponse(
     val choices: List<KimiChoice>?,
     val error: KimiError?
 )
 
-data class KimiChoice(
+data class GroqChoice(
     val message: KimiMessage?,
     @SerializedName("finish_reason") val finishReason: String?
 )
 
-data class KimiError(
+data class GroqError(
     val message: String,
     val type: String
 )

@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.codemaster.aistudio.data.CodeMasterDatabase
 import com.codemaster.aistudio.data.api.GeminiApiService
-import com.codemaster.aistudio.data.api.KimiApiService
+import com.codemaster.aistudio.data.api.GroqApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -56,18 +56,18 @@ object AppModule {
     // ─── Kimi Retrofit ─────────────────────────────────────────
     @Provides
     @Singleton
-    @Named("kimi")
-    fun provideKimiRetrofit(okHttpClient: OkHttpClient): Retrofit =
+    @Named("groq")
+    fun provideGroqRetrofit(okHttpClient: OkHttpClient): Retrofit =
         Retrofit.Builder()
-            .baseUrl("https://api.moonshot.cn/")
+            .baseUrl("https://api.groq.com/openai/")
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
 
     @Provides
     @Singleton
-    fun provideKimiService(@Named("kimi") retrofit: Retrofit): KimiApiService =
-        retrofit.create(KimiApiService::class.java)
+    fun provideGroqService(@Named("groq") retrofit: Retrofit): GroqApiService =
+        retrofit.create(GroqApiService::class.java)
 
     // ─── Room Database ─────────────────────────────────────────
     @Provides

@@ -18,7 +18,7 @@ sealed class AiResult {
 @Singleton
 class AiRepository @Inject constructor(
     private val geminiService: GeminiApiService,
-    private val kimiService: KimiApiService,
+    private val groqService: GroqApiService,
     private val settingsRepository: SettingsRepository
 ) {
 
@@ -43,7 +43,7 @@ class AiRepository @Inject constructor(
         val settings = settingsRepository.getSettings()
         return@withContext when (provider) {
             AiProvider.GEMINI -> sendToGemini(userMessage, history, settings.geminiApiKey)
-            AiProvider.KIMI -> sendToKimi(userMessage, history, settings.kimiApiKey)
+            AiProvider.KIMI -> sendToKimi(userMessage, history, settings.groqApiKey)
         }
     }
 
@@ -91,7 +91,7 @@ class AiRepository @Inject constructor(
         history: List<ChatMessage>,
         apiKey: String
     ): AiResult {
-        if (apiKey.isBlank()) return AiResult.Error("Kimi API key not set. Go to Settings to add your key.")
+        if (apiKey.isBlank()) return AiResult.Error("Groq API key not set. Go to Settings to add your key.")
         return try {
             val messages = mutableListOf<KimiMessage>()
             messages.add(KimiMessage(role = "system", content = systemPrompt))
@@ -101,16 +101,16 @@ class AiRepository @Inject constructor(
             }
             messages.add(KimiMessage(role = "user", content = userMessage))
 
-            val request = KimiRequest(
+            val request = GroqRequest(
                 model = "moonshot-v1-8k",
                 messages = messages
             )
-            val response = kimiService.chatCompletions(
+            val response = groqService.chatCompletions(
                 request = request,
                 auth = "Bearer $apiKey"
             )
             if (response.error != null) {
-                AiResult.Error("Kimi error: ${response.error.message}")
+                AiResult.Error("Groq error: ${response.error.message}")
             } else {
                 val text = response.choices?.firstOrNull()?.message?.content
                     ?: "No response from Kimi."
