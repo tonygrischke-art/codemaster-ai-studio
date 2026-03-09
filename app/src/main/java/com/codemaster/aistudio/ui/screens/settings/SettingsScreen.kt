@@ -25,10 +25,9 @@ fun SettingsScreen(
     var groqKey by remember { mutableStateOf("") }
 
     LaunchedEffect(settings) {
-        settings?.let {
-            geminiKey = it.geminiApiKey
-            groqKey = it.groqApiKey
-        }
+        val s = settings ?: return@LaunchedEffect
+        geminiKey = s.geminiApiKey
+        groqKey = s.groqApiKey
     }
 
     Scaffold(
@@ -85,11 +84,12 @@ fun SettingsScreen(
                 Text("Save Groq Key")
             }
 
-            Divider()
+            HorizontalDivider()
 
             Text("Appearance", style = MaterialTheme.typography.titleMedium)
 
-            settings?.let { s ->
+            val s = settings
+            if (s != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -97,8 +97,20 @@ fun SettingsScreen(
                 ) {
                     Text("Dark Theme")
                     Switch(
-                        checked = s.isDarkTheme,
+                        checked = s.darkTheme,
                         onCheckedChange = { viewModel.updateTheme(it) }
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Auto Save")
+                    Switch(
+                        checked = s.autoSave,
+                        onCheckedChange = { }
                     )
                 }
             }

@@ -14,7 +14,7 @@ class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
-    val settings = settingsRepository.settings
+    val settings = settingsRepository.settingsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     fun updateGeminiKey(key: String) {
@@ -26,7 +26,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun updateTheme(isDark: Boolean) {
-        viewModelScope.launch { settingsRepository.updateTheme(isDark) }
+        viewModelScope.launch { settingsRepository.updateDarkTheme(isDark) }
     }
 
     fun updateFontSize(size: Int) {
