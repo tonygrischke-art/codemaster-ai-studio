@@ -21,10 +21,8 @@ class AiRepository @Inject constructor(
     private val groqService: GroqApiService,
     private val settingsRepository: SettingsRepository
 ) {
-
-    // System prompt for CodeMaster context
     private val systemPrompt = """
-        You are CodeMaster AI, an expert coding assistant embedded in a mobile IDE for Android.
+        You are CodeMaster AI, an expert coding assistant embedded in a mobile IDE.
         Your primary goals:
         1. Help users write, debug, fix, and explain code in any language
         2. Generate complete, working code snippets and files
@@ -54,20 +52,15 @@ class AiRepository @Inject constructor(
     ): AiResult {
         if (apiKey.isBlank()) return AiResult.Error("Gemini API key not set. Go to Settings to add your key.")
         return try {
-            // Build conversation history in Gemini format
             val contents = mutableListOf<GeminiContent>()
             history.takeLast(20).forEach { msg ->
                 val role = if (msg.role == MessageRole.USER) "user" else "model"
                 contents.add(GeminiContent(role = role, parts = listOf(GeminiPart(msg.content))))
             }
             contents.add(GeminiContent(role = "user", parts = listOf(GeminiPart(userMessage))))
-
             val request = GeminiRequest(
                 contents = contents,
-                systemInstruction = GeminiContent(
-                    role = "user",
-                    parts = listOf(GeminiPart(systemPrompt))
-                )
+                systemInstruction = GeminiContent(role = "user", parts = listOf(GeminiPart(systemPrompt)))
             )
             val response = geminiService.generateContent(
                 model = "gemini-1.5-flash",
@@ -100,7 +93,6 @@ class AiRepository @Inject constructor(
                 messages.add(GroqMessage(role = role, content = msg.content))
             }
             messages.add(GroqMessage(role = "user", content = userMessage))
-
             val request = GroqRequest(
                 model = "llama-3.3-70b-versatile",
                 messages = messages
@@ -117,7 +109,7 @@ class AiRepository @Inject constructor(
                 AiResult.Success(text)
             }
         } catch (e: Exception) {
-            AiResult.Error("Network error: ${e.localizedMessage}")
+            AiResult.Error("Groq had an issue — try again! (${e.localizedMessage})")
         }
     }
 }

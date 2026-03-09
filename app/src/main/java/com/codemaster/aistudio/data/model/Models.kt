@@ -4,13 +4,11 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import java.util.UUID
 
-// ─── AI Provider ───────────────────────────────────────────────
 enum class AiProvider(val displayName: String, val shortName: String) {
     GEMINI("Google Gemini", "Gemini"),
-    KIMI("Moonshot Kimi", "Kimi")
+    GROQ("Groq AI", "Groq")
 }
 
-// ─── Chat Message ──────────────────────────────────────────────
 @Entity(tableName = "chat_messages")
 data class ChatMessage(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
@@ -25,7 +23,6 @@ data class ChatMessage(
 
 enum class MessageRole { USER, ASSISTANT, SYSTEM }
 
-// ─── Project ───────────────────────────────────────────────────
 @Entity(tableName = "projects")
 data class Project(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
@@ -48,13 +45,14 @@ enum class ProjectLanguage(val displayName: String, val extension: String, val e
     OTHER("Other", "txt", "📄")
 }
 
-// ─── Settings ──────────────────────────────────────────────────
 data class AppSettings(
     val geminiApiKey: String = "",
-    val kimiApiKey: String = "",
+    val groqApiKey: String = "",
     val defaultProvider: AiProvider = AiProvider.GEMINI,
     val darkTheme: Boolean = true,
     val fontSize: Int = 14,
     val sandboxMode: Boolean = true,
-    val autoSave: Boolean = true
+    val autoSave: Boolean = true,
+    val voiceEnabled: Boolean = true,
+    val explainLikeIm5: Boolean = false
 )
