@@ -43,7 +43,7 @@ class AiRepository @Inject constructor(
         val settings = settingsRepository.getSettings()
         return@withContext when (provider) {
             AiProvider.GEMINI -> sendToGemini(userMessage, history, settings.geminiApiKey)
-            AiProvider.KIMI -> sendToGroq(userMessage, history, settings.groqApiKey)
+            AiProvider.GROQ -> sendToGroq(userMessage, history, settings.groqApiKey)
         }
     }
 
