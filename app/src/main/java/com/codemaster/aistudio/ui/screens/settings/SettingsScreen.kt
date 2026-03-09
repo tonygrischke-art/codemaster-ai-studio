@@ -24,7 +24,7 @@ fun SettingsScreen(
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     var showGeminiKey by remember { mutableStateOf(false) }
-    var showKimiKey by remember { mutableStateOf(false) }
+    var showGroqKey by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -76,17 +76,17 @@ fun SettingsScreen(
 
             item {
                 OutlinedTextField(
-                    value = settings?.kimiApiKey ?: "",
-                    onValueChange = viewModel::updateKimiKey,
-                    label = { Text("Moonshot Kimi API Key") },
+                    value = settings?.groqApiKey ?: "",
+                    onValueChange = viewModel::updateGroqKey,
+                    label = { Text("Moonshot Groq API Key") },
                     placeholder = { Text("sk-...") },
                     modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = if (showKimiKey) VisualTransformation.None else PasswordVisualTransformation(),
+                    visualTransformation = if (showGroqKey) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     trailingIcon = {
-                        IconButton(onClick = { showKimiKey = !showKimiKey }) {
+                        IconButton(onClick = { showGroqKey = !showGroqKey }) {
                             Icon(
-                                if (showKimiKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                if (showGroqKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                                 contentDescription = null
                             )
                         }

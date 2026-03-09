@@ -21,7 +21,7 @@ class SettingsRepository @Inject constructor(
 ) {
     private object Keys {
         val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
-        val KIMI_API_KEY = stringPreferencesKey("kimi_api_key")
+        val GROQ_API_KEY = stringPreferencesKey("groq_api_key")
         val DEFAULT_PROVIDER = stringPreferencesKey("default_provider")
         val DARK_THEME = booleanPreferencesKey("dark_theme")
         val FONT_SIZE = intPreferencesKey("font_size")
@@ -32,7 +32,7 @@ class SettingsRepository @Inject constructor(
     val settingsFlow: Flow<AppSettings> = context.dataStore.data.map { prefs ->
         AppSettings(
             geminiApiKey = prefs[Keys.GEMINI_API_KEY] ?: "",
-            kimiApiKey = prefs[Keys.KIMI_API_KEY] ?: "",
+            groqApiKey = prefs[Keys.GROQ_API_KEY] ?: "",
             defaultProvider = AiProvider.valueOf(prefs[Keys.DEFAULT_PROVIDER] ?: AiProvider.GEMINI.name),
             darkTheme = prefs[Keys.DARK_THEME] ?: true,
             fontSize = prefs[Keys.FONT_SIZE] ?: 14,
@@ -47,8 +47,8 @@ class SettingsRepository @Inject constructor(
         context.dataStore.edit { it[Keys.GEMINI_API_KEY] = key }
     }
 
-    suspend fun updateKimiKey(key: String) {
-        context.dataStore.edit { it[Keys.KIMI_API_KEY] = key }
+    suspend fun updateGroqKey(key: String) {
+        context.dataStore.edit { it[Keys.GROQ_API_KEY] = key }
     }
 
     suspend fun updateDefaultProvider(provider: AiProvider) {

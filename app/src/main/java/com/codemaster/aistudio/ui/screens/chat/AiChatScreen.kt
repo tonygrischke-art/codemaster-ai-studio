@@ -134,7 +134,7 @@ fun ChatTopBar(
                 Text("AI Chat", style = MaterialTheme.typography.titleLarge)
                 ProviderToggleChip(
                     selectedProvider = selectedProvider,
-                    onSwitch = { onSwitchProvider(if (selectedProvider == AiProvider.GEMINI) AiProvider.KIMI else AiProvider.GEMINI) }
+                    onSwitch = { onSwitchProvider(if (selectedProvider == AiProvider.GEMINI) AiProvider.GROQ else AiProvider.GEMINI) }
                 )
             }
         },
