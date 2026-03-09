@@ -43,7 +43,7 @@ class AiRepository @Inject constructor(
         val settings = settingsRepository.getSettings()
         return@withContext when (provider) {
             AiProvider.GEMINI -> sendToGemini(userMessage, history, settings.geminiApiKey)
-            AiProvider.KIMI -> sendToKimi(userMessage, history, settings.groqApiKey)
+            AiProvider.KIMI -> sendToGroq(userMessage, history, settings.groqApiKey)
         }
     }
 
@@ -86,23 +86,23 @@ class AiRepository @Inject constructor(
         }
     }
 
-    private suspend fun sendToKimi(
+    private suspend fun sendToGroq(
         userMessage: String,
         history: List<ChatMessage>,
         apiKey: String
     ): AiResult {
         if (apiKey.isBlank()) return AiResult.Error("Groq API key not set. Go to Settings to add your key.")
         return try {
-            val messages = mutableListOf<KimiMessage>()
-            messages.add(KimiMessage(role = "system", content = systemPrompt))
+            val messages = mutableListOf<GroqMessage>()
+            messages.add(GroqMessage(role = "system", content = systemPrompt))
             history.takeLast(20).forEach { msg ->
                 val role = if (msg.role == MessageRole.USER) "user" else "assistant"
-                messages.add(KimiMessage(role = role, content = msg.content))
+                messages.add(GroqMessage(role = role, content = msg.content))
             }
-            messages.add(KimiMessage(role = "user", content = userMessage))
+            messages.add(GroqMessage(role = "user", content = userMessage))
 
             val request = GroqRequest(
-                model = "moonshot-v1-8k",
+                model = "llama-3.3-70b-versatile",
                 messages = messages
             )
             val response = groqService.chatCompletions(
@@ -113,7 +113,7 @@ class AiRepository @Inject constructor(
                 AiResult.Error("Groq error: ${response.error.message}")
             } else {
                 val text = response.choices?.firstOrNull()?.message?.content
-                    ?: "No response from Kimi."
+                    ?: "No response from Groq."
                 AiResult.Success(text)
             }
         } catch (e: Exception) {
