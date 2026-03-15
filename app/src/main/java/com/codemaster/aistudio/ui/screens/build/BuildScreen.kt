@@ -1,566 +1,186 @@
 package com.codemaster.aistudio.ui.screens.build
 
-import android.content.Intent
-import android.net.Uri
-import androidx.compose.animation.*
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.codemaster.aistudio.data.repository.BuildArtifact
-import com.codemaster.aistudio.data.repository.BuildStatus
-import com.codemaster.aistudio.data.repository.FileResult
-import com.codemaster.aistudio.data.repository.GitHubActionsRepository
-import com.codemaster.aistudio.data.repository.SettingsRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import javax.inject.Inject
+import com.codemaster.aistudio.ui.screens.settings.SettingsViewModel
 
-// ─── UI State ──────────────────────────────────────────────────
-data class BuildUiState(
-    val builds: List<BuildStatus> = emptyList(),
-    val artifacts: Map<Long, List<BuildArtifact>> = emptyMap(),
-    val isLoading: Boolean = false,
-    val isTriggering: Boolean = false,
-    val successMessage: String? = null,
-    val errorMessage: String? = null,
-    val githubToken: String = "",
-    val githubRepo: String = "",
-    val isConfigured: Boolean = false,
-    val autoRefresh: Boolean = false
-)
-
-// ─── ViewModel ─────────────────────────────────────────────────
-@HiltViewModel
-class BuildViewModel @Inject constructor(
-    private val githubActionsRepository: GitHubActionsRepository,
-    private val settingsRepository: SettingsRepository
-) : ViewModel() {
-
-    private val _uiState = MutableStateFlow(BuildUiState())
-    val uiState: StateFlow<BuildUiState> = _uiState.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-            val token = settingsRepository.getGitHubToken()
-            val repo = settingsRepository.getGitHubRepo()
-            _uiState.update {
-                it.copy(
-                    githubToken = token,
-                    githubRepo = repo,
-                    isConfigured = token.isNotBlank() && repo.isNotBlank()
-                )
-            }
-            if (token.isNotBlank() && repo.isNotBlank()) {
-                loadBuilds()
-            }
-        }
-    }
-
-    fun loadBuilds() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            when (val result = githubActionsRepository.getRecentBuilds()) {
-                is FileResult.Success -> {
-                    _uiState.update { it.copy(builds = result.data, isLoading = false) }
-                }
-                is FileResult.Error -> {
-                    _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
-                }
-            }
-        }
-    }
-
-    fun triggerBuild() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isTriggering = true, errorMessage = null) }
-            when (val result = githubActionsRepository.triggerBuild()) {
-                is FileResult.Success -> {
-                    _uiState.update {
-                        it.copy(isTriggering = false, successMessage = result.data)
-                    }
-                    // Wait a bit then refresh builds
-                    delay(3000)
-                    loadBuilds()
-                }
-                is FileResult.Error -> {
-                    _uiState.update {
-                        it.copy(isTriggering = false, errorMessage = result.message)
-                    }
-                }
-            }
-        }
-    }
-
-    fun loadArtifacts(runId: Long) {
-        viewModelScope.launch {
-            when (val result = githubActionsRepository.getArtifacts(runId)) {
-                is FileResult.Success -> {
-                    _uiState.update { state ->
-                        state.copy(artifacts = state.artifacts + (runId to result.data))
-                    }
-                }
-                is FileResult.Error -> { /* silently fail */ }
-            }
-        }
-    }
-
-    fun saveGitHubConfig(token: String, repo: String) {
-        viewModelScope.launch {
-            settingsRepository.saveGitHubToken(token)
-            settingsRepository.saveGitHubRepo(repo)
-            _uiState.update {
-                it.copy(
-                    githubToken = token,
-                    githubRepo = repo,
-                    isConfigured = token.isNotBlank() && repo.isNotBlank()
-                )
-            }
-            if (token.isNotBlank() && repo.isNotBlank()) loadBuilds()
-        }
-    }
-
-    fun clearMessages() {
-        _uiState.update { it.copy(successMessage = null, errorMessage = null) }
-    }
-}
-
-// ─── Build Screen ──────────────────────────────────────────────
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BuildScreen(
-    onNavigateBack: () -> Unit,
-    viewModel: BuildViewModel = hiltViewModel()
+    projectId: Long,
+    onBack: () -> Unit,
+    settingsViewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    var showConfigDialog by remember { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
+    val settingsState by settingsViewModel.uiState.collectAsState()
+    val scrollState = rememberScrollState()
 
-    LaunchedEffect(uiState.successMessage) {
-        uiState.successMessage?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.clearMessages()
-        }
-    }
+    val buildLogs = remember { mutableStateListOf<String>() }
+    var buildStatus by remember { mutableStateOf("idle") }
 
-    LaunchedEffect(uiState.errorMessage) {
-        uiState.errorMessage?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.clearMessages()
-        }
+    LaunchedEffect(Unit) {
+        buildLogs.add("[CodeMaster] Build system ready.")
+        buildLogs.add("[CodeMaster] Configure your GitHub token in Settings to trigger builds.")
+        buildLogs.add("[CodeMaster] Repository: github.com/tonygrischke-art/codemaster-ai-studio")
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text("Build", fontWeight = FontWeight.Bold)
-                        if (uiState.githubRepo.isNotBlank()) {
-                            Text(
-                                uiState.githubRepo,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
-                    }
-                },
+                title = { Text("Build", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showConfigDialog = true }) {
-                        Icon(Icons.Default.Key, contentDescription = "Configure")
-                    }
-                    IconButton(onClick = { viewModel.loadBuilds() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                    }
+                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
                 }
             )
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { if (!uiState.isTriggering) viewModel.triggerBuild() },
-                icon = {
-                    if (uiState.isTriggering) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Icon(Icons.Default.RocketLaunch, contentDescription = null)
-                    }
-                },
-                text = { Text(if (uiState.isTriggering) "Triggering..." else "Build APK") },
-                containerColor = if (uiState.isConfigured)
-                    MaterialTheme.colorScheme.primary
-                else
-                    MaterialTheme.colorScheme.surfaceVariant
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        Column(
+            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(scrollState),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Not configured warning
-            if (!uiState.isConfigured) {
-                item {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("GitHub not configured",
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.error)
-                                Text("Tap the key icon to add your GitHub token and repo",
-                                    style = MaterialTheme.typography.bodySmall)
-                            }
-                            TextButton(onClick = { showConfigDialog = true }) {
-                                Text("Setup")
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Loading
-            if (uiState.isLoading) {
-                item {
-                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp),
-                        contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                }
-            }
-
-            // Build list header
-            if (uiState.builds.isNotEmpty()) {
-                item {
-                    Text("Recent Builds",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold)
-                }
-            }
-
-            // Build cards
-            items(uiState.builds, key = { it.id }) { build ->
-                BuildCard(
-                    build = build,
-                    artifacts = uiState.artifacts[build.id],
-                    onLoadArtifacts = { viewModel.loadArtifacts(build.id) },
-                    onOpenInBrowser = {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse(build.htmlUrl))
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
+            // Status Card
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = when (buildStatus) {
+                        "success" -> Color(0xFF1B5E20)
+                        "failure" -> MaterialTheme.colorScheme.errorContainer
+                        "in_progress" -> MaterialTheme.colorScheme.primaryContainer
+                        else -> MaterialTheme.colorScheme.surfaceVariant
                     }
                 )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        when (buildStatus) {
+                            "success" -> Icons.Default.CheckCircle
+                            "failure" -> Icons.Default.Error
+                            "in_progress" -> Icons.Default.Sync
+                            else -> Icons.Default.Circle
+                        },
+                        contentDescription = null,
+                        tint = when (buildStatus) {
+                            "success" -> Color(0xFF69F0AE)
+                            "failure" -> MaterialTheme.colorScheme.error
+                            "in_progress" -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.outline
+                        }
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text("Build Status", fontWeight = FontWeight.Bold)
+                        Text(
+                            buildStatus.replaceFirstChar { it.uppercase() },
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
             }
 
-            // Bottom padding for FAB
-            item { Spacer(Modifier.height(80.dp)) }
-        }
-    }
-
-    // Config dialog
-    if (showConfigDialog) {
-        GitHubConfigDialog(
-            currentToken = uiState.githubToken,
-            currentRepo = uiState.githubRepo,
-            onSave = { token, repo ->
-                viewModel.saveGitHubConfig(token, repo)
-                showConfigDialog = false
-            },
-            onDismiss = { showConfigDialog = false }
-        )
-    }
-}
-
-// ─── Build Card ────────────────────────────────────────────────
-@Composable
-fun BuildCard(
-    build: BuildStatus,
-    artifacts: List<BuildArtifact>?,
-    onLoadArtifacts: () -> Unit,
-    onOpenInBrowser: () -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+            // Action Buttons
             Row(
-                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Status indicator
-                BuildStatusDot(build.status, build.conclusion)
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        build.name.take(50),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1
-                    )
-                    Text(
-                        buildStatusText(build.status, build.conclusion),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = buildStatusColor(build.status, build.conclusion)
-                    )
-                    Text(
-                        formatBuildTime(build.createdAt),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                // Actions
-                Row {
-                    IconButton(onClick = onOpenInBrowser, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.OpenInNew, contentDescription = "Open in browser",
-                            modifier = Modifier.size(18.dp))
-                    }
-                    if (build.conclusion == "success") {
-                        IconButton(
-                            onClick = {
-                                expanded = !expanded
-                                if (expanded && artifacts == null) onLoadArtifacts()
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = "Toggle artifacts",
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Artifacts expansion
-            AnimatedVisibility(visible = expanded) {
-                Column(modifier = Modifier.padding(top = 12.dp)) {
-                    HorizontalDivider()
-                    Spacer(Modifier.height(8.dp))
-                    Text("Artifacts", style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(4.dp))
-                    if (artifacts == null) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                    } else if (artifacts.isEmpty()) {
-                        Text("No artifacts found", style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    } else {
-                        artifacts.forEach { artifact ->
-                            ArtifactRow(artifact)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ArtifactRow(artifact: BuildArtifact) {
-    val context = LocalContext.current
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Android, contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = Color(0xFF3DDC84))
-            Column {
-                Text(artifact.name, style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium)
-                Text(formatBytes(artifact.sizeInBytes),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        TextButton(
-            onClick = {
-                // Open download URL in browser
-                context.startActivity(
-                    Intent(Intent.ACTION_VIEW, Uri.parse(artifact.downloadUrl))
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
-            },
-            contentPadding = PaddingValues(horizontal = 8.dp)
-        ) {
-            Icon(Icons.Default.Download, contentDescription = null,
-                modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(4.dp))
-            Text("Download", style = MaterialTheme.typography.labelSmall)
-        }
-    }
-}
-
-@Composable
-fun BuildStatusDot(status: String, conclusion: String?) {
-    val color = buildStatusColor(status, conclusion)
-    val isAnimating = status == "in_progress" || status == "queued"
-
-    Box(
-        modifier = Modifier
-            .size(12.dp)
-            .clip(CircleShape)
-            .background(color)
-    )
-}
-
-// ─── GitHub Config Dialog ──────────────────────────────────────
-@Composable
-fun GitHubConfigDialog(
-    currentToken: String,
-    currentRepo: String,
-    onSave: (String, String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var token by remember { mutableStateOf(currentToken) }
-    var repo by remember { mutableStateOf(currentRepo) }
-    var showToken by remember { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("GitHub Configuration") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    "Add your GitHub Personal Access Token (with workflow permissions) and your repo in owner/repo format.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                OutlinedTextField(
-                    value = repo,
-                    onValueChange = { repo = it },
-                    label = { Text("Repository") },
-                    placeholder = { Text("tonygrischke-art/codemaster-ai-studio") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Default.Code, contentDescription = null,
-                        modifier = Modifier.size(18.dp)) }
-                )
-                OutlinedTextField(
-                    value = token,
-                    onValueChange = { token = it },
-                    label = { Text("GitHub Token") },
-                    placeholder = { Text("ghp_...") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    visualTransformation = if (showToken)
-                        androidx.compose.ui.text.input.VisualTransformation.None
-                    else
-                        androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { showToken = !showToken }) {
-                            Icon(
-                                if (showToken) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = "Toggle visibility",
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                Button(
+                    onClick = {
+                        buildStatus = "in_progress"
+                        buildLogs.add("[${System.currentTimeMillis()}] Triggering GitHub Actions build...")
+                        buildLogs.add("Push a commit to main branch or configure workflow_dispatch.")
                     },
-                    leadingIcon = { Icon(Icons.Default.Key, contentDescription = null,
-                        modifier = Modifier.size(18.dp)) }
-                )
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Trigger Build")
+                }
+                OutlinedButton(
+                    onClick = {
+                        buildLogs.clear()
+                        buildStatus = "idle"
+                        buildLogs.add("[CodeMaster] Logs cleared.")
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.Delete, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Clear")
+                }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onSave(token.trim(), repo.trim()) },
-                enabled = token.isNotBlank() && repo.isNotBlank()
-            ) { Text("Save") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+
+            // Build Info
+            Card(shape = RoundedCornerShape(12.dp)) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Build Configuration", fontWeight = FontWeight.Bold)
+                    HorizontalDivider()
+                    BuildInfoRow("Workflow", "Build CodeMaster AI Studio APK")
+                    BuildInfoRow("Branch", "main")
+                    BuildInfoRow("Runner", "ubuntu-latest")
+                    BuildInfoRow("JDK", "17")
+                    BuildInfoRow("Gradle", "8.4")
+                    BuildInfoRow("Output", "app-debug.apk")
+                }
+            }
+
+            // Log Output
+            Text("Build Log", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E))
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                    buildLogs.forEach { log ->
+                        Text(
+                            text = log,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            color = Color(0xFF00FF41),
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+            }
+
+            // GitHub Actions Link info
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+            ) {
+                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "Monitor live builds at:
+github.com/tonygrischke-art/codemaster-ai-studio/actions",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
         }
-    )
+    }
 }
 
-// ─── Helpers ───────────────────────────────────────────────────
 @Composable
-fun buildStatusColor(status: String, conclusion: String?): Color {
-    return when {
-        conclusion == "success" -> Color(0xFF3FB950)
-        conclusion == "failure" -> Color(0xFFF85149)
-        conclusion == "cancelled" -> Color(0xFF8B949E)
-        status == "in_progress" -> Color(0xFFF0883E)
-        status == "queued" -> Color(0xFF58A6FF)
-        else -> Color(0xFF8B949E)
-    }
-}
-
-fun buildStatusText(status: String, conclusion: String?): String {
-    return when {
-        conclusion == "success" -> "✅ Success"
-        conclusion == "failure" -> "❌ Failed"
-        conclusion == "cancelled" -> "⚫ Cancelled"
-        status == "in_progress" -> "🟡 Building..."
-        status == "queued" -> "🔵 Queued"
-        else -> status
-    }
-}
-
-fun formatBuildTime(isoTime: String): String {
-    return try {
-        isoTime.replace("T", " ").replace("Z", " UTC").take(19) + " UTC"
-    } catch (e: Exception) {
-        isoTime
-    }
-}
-
-fun formatBytes(bytes: Long): String {
-    return when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-        else -> "${bytes / (1024 * 1024)} MB"
+fun BuildInfoRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(100.dp))
+        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
     }
 }

@@ -2,57 +2,56 @@ package com.codemaster.aistudio.data.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import java.util.UUID
-
-enum class AiProvider(val displayName: String, val shortName: String) {
-    GEMINI("Google Gemini", "Gemini"),
-    GROQ("Groq AI", "Groq")
-}
-
-@Entity(tableName = "chat_messages")
-data class ChatMessage(
-    @PrimaryKey val id: String = UUID.randomUUID().toString(),
-    val projectId: String = "",
-    val role: MessageRole,
-    val content: String,
-    val provider: AiProvider = AiProvider.GEMINI,
-    val timestamp: Long = System.currentTimeMillis(),
-    val hasCodeBlock: Boolean = false,
-    val isError: Boolean = false
-)
-
-enum class MessageRole { USER, ASSISTANT, SYSTEM }
+import androidx.room.TypeConverter
+import androidx.room.TypeConverters
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 @Entity(tableName = "projects")
 data class Project(
-    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
-    val description: String = "",
-    val language: ProjectLanguage = ProjectLanguage.KOTLIN,
-    val path: String = "",
+    val language: String,
+    val description: String,
     val createdAt: Long = System.currentTimeMillis(),
+    val lastModified: Long = System.currentTimeMillis(),
+    val path: String = ""
+)
+
+@Entity(tableName = "chat_messages")
+data class ChatMessage(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val projectId: Long = -1L,
+    val role: String, // "user" or "assistant"
+    val content: String,
+    val timestamp: Long = System.currentTimeMillis(),
+    val tokenCount: Int = 0,
+    val attachedFileName: String? = null
+)
+
+@Entity(tableName = "code_files")
+data class CodeFile(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val projectId: Long,
+    val name: String,
+    val path: String,
+    val content: String = "",
+    val language: String = "kotlin",
     val lastModified: Long = System.currentTimeMillis()
 )
 
-enum class ProjectLanguage(val displayName: String, val extension: String, val emoji: String) {
-    KOTLIN("Kotlin", "kt", "🟣"),
-    JAVA("Java", "java", "☕"),
-    PYTHON("Python", "py", "🐍"),
-    JAVASCRIPT("JavaScript", "js", "🟨"),
-    DART("Flutter/Dart", "dart", "💙"),
-    CPP("C++", "cpp", "⚙️"),
-    SHELL("Shell Script", "sh", "💻"),
-    OTHER("Other", "txt", "📄")
-}
-
-data class AppSettings(
-    val geminiApiKey: String = "",
-    val groqApiKey: String = "",
-    val defaultProvider: AiProvider = AiProvider.GEMINI,
-    val darkTheme: Boolean = true,
-    val fontSize: Int = 14,
-    val sandboxMode: Boolean = true,
-    val autoSave: Boolean = true,
-    val voiceEnabled: Boolean = true,
-    val explainLikeIm5: Boolean = false
+data class BuildStatus(
+    val runId: String = "",
+    val status: String = "idle", // idle, queued, in_progress, completed
+    val conclusion: String? = null, // success, failure, cancelled
+    val message: String = "",
+    val updatedAt: Long = System.currentTimeMillis()
 )
+
+class StringListConverter {
+    @TypeConverter
+    fun fromList(list: List<String>): String = Gson().toJson(list)
+    @TypeConverter
+    fun toList(json: String): List<String> =
+        Gson().fromJson(json, object : TypeToken<List<String>>() {}.type)
+}

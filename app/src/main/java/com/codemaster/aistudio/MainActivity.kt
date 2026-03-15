@@ -4,25 +4,26 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
-import androidx.compose.ui.Modifier
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.codemaster.aistudio.ui.navigation.CodeMasterNavGraph
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.compose.rememberNavController
+import com.codemaster.aistudio.ui.navigation.NavGraph
+import com.codemaster.aistudio.ui.screens.settings.SettingsViewModel
 import com.codemaster.aistudio.ui.theme.CodeMasterTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            CodeMasterTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    CodeMasterNavGraph()
-                }
+            val settingsViewModel: SettingsViewModel = hiltViewModel()
+            val settingsState by settingsViewModel.uiState.collectAsState()
+            CodeMasterTheme(darkTheme = settingsState.isDarkTheme) {
+                val navController = rememberNavController()
+                NavGraph(navController = navController)
             }
         }
     }

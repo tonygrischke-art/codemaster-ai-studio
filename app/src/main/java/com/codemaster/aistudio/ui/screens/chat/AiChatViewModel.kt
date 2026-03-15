@@ -1,21 +1,16 @@
 package com.codemaster.aistudio.ui.screens.chat
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.codemaster.aistudio.data.CodeMasterDatabase
-import com.codemaster.aistudio.data.model.AiProvider
 import com.codemaster.aistudio.data.model.ChatMessage
-import com.codemaster.aistudio.data.model.MessageRole
 import com.codemaster.aistudio.data.repository.AiRepository
-import com.codemaster.aistudio.data.repository.AiResult
-import com.codemaster.aistudio.data.repository.SettingsRepository
+import com.codemaster.aistudio.data.repository.ChatRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -23,104 +18,98 @@ data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val inputText: String = "",
     val isLoading: Boolean = false,
-    val selectedProvider: AiProvider = AiProvider.GEMINI,
-    val errorMessage: String? = null,
-    val projectId: String = ""
+    val attachedFileName: String? = null,
+    val attachedFileContent: String? = null,
+    val totalTokens: Int = 0,
+    val error: String? = null,
+    val projectName: String = "Chat"
 )
 
 @HiltViewModel
 class AiChatViewModel @Inject constructor(
     private val aiRepository: AiRepository,
-    private val settingsRepository: SettingsRepository,
-    private val db: CodeMasterDatabase
+    private val chatRepository: ChatRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
-    fun init(projectId: String) {
-        _uiState.update { it.copy(projectId = projectId) }
-        // Load settings for default provider
+    private var currentProjectId: Long = -1L
+
+    fun init(projectId: Long) {
+        currentProjectId = projectId
         viewModelScope.launch {
-            val settings = settingsRepository.getSettings()
-            _uiState.update { it.copy(selectedProvider = settings.defaultProvider) }
-        }
-        // Observe messages for project
-        viewModelScope.launch {
-            db.chatMessageDao().getMessagesForProject(projectId).collect { messages ->
-                _uiState.update { it.copy(messages = messages) }
-            }
+            chatRepository.getMessagesForProject(projectId)
+                .catch { }
+                .collect { messages ->
+                    val tokens = messages.sumOf { it.tokenCount }
+                    _uiState.value = _uiState.value.copy(messages = messages, totalTokens = tokens)
+                }
         }
     }
 
-    fun updateInput(text: String) {
-        _uiState.update { it.copy(inputText = text) }
+    fun updateInput(text: String) { _uiState.value = _uiState.value.copy(inputText = text) }
+
+    fun attachFile(fileName: String, content: String) {
+        _uiState.value = _uiState.value.copy(
+            attachedFileName = fileName,
+            attachedFileContent = content
+        )
     }
 
-    fun switchProvider(provider: AiProvider) {
-        _uiState.update { it.copy(selectedProvider = provider) }
+    fun clearAttachment() {
+        _uiState.value = _uiState.value.copy(attachedFileName = null, attachedFileContent = null)
     }
 
     fun sendMessage() {
         val state = _uiState.value
         val text = state.inputText.trim()
-        if (text.isBlank() || state.isLoading) return
+        if (text.isBlank() && state.attachedFileContent == null) return
+        if (state.isLoading) return
+
+        val displayText = if (state.attachedFileName != null) "$text
+📎 ${state.attachedFileName}" else text
 
         viewModelScope.launch {
-            // Save user message
-            val userMsg = ChatMessage(
-                projectId = state.projectId,
-                role = MessageRole.USER,
-                content = text,
-                provider = state.selectedProvider
+            val userMessage = ChatMessage(
+                projectId = currentProjectId,
+                role = "user",
+                content = displayText,
+                tokenCount = aiRepository.estimateTokens(displayText),
+                attachedFileName = state.attachedFileName
             )
-            db.chatMessageDao().insertMessage(userMsg)
-            _uiState.update { it.copy(inputText = "", isLoading = true, errorMessage = null) }
+            chatRepository.saveMessage(userMessage)
+            _uiState.value = state.copy(inputText = "", isLoading = true, attachedFileName = null, attachedFileContent = null)
 
-            // Call AI
             val result = aiRepository.sendMessage(
+                history = _uiState.value.messages.dropLast(1),
                 userMessage = text,
-                history = state.messages,
-                provider = state.selectedProvider
+                attachedFileContent = state.attachedFileContent
             )
 
-            when (result) {
-                is AiResult.Success -> {
-                    val aiMsg = ChatMessage(
-                        projectId = state.projectId,
-                        role = MessageRole.ASSISTANT,
-                        content = result.content,
-                        provider = state.selectedProvider,
-                        hasCodeBlock = result.content.contains("```")
+            result.fold(
+                onSuccess = { response ->
+                    val aiMessage = ChatMessage(
+                        projectId = currentProjectId,
+                        role = "assistant",
+                        content = response,
+                        tokenCount = aiRepository.estimateTokens(response)
                     )
-                    db.chatMessageDao().insertMessage(aiMsg)
-                    _uiState.update { it.copy(isLoading = false) }
+                    chatRepository.saveMessage(aiMessage)
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                },
+                onFailure = { e ->
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
                 }
-                is AiResult.Error -> {
-                    val errMsg = ChatMessage(
-                        projectId = state.projectId,
-                        role = MessageRole.ASSISTANT,
-                        content = result.message,
-                        provider = state.selectedProvider,
-                        isError = true
-                    )
-                    db.chatMessageDao().insertMessage(errMsg)
-                    _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
-                }
-                else -> _uiState.update { it.copy(isLoading = false) }
-            }
+            )
         }
     }
 
     fun clearHistory() {
         viewModelScope.launch {
-            db.chatMessageDao().clearProjectHistory(_uiState.value.projectId)
+            chatRepository.clearMessagesForProject(currentProjectId)
         }
     }
 
-    // Quick prompt shortcuts
-    fun sendQuickPrompt(prompt: String) {
-        _uiState.update { it.copy(inputText = prompt) }
-        sendMessage()
-    }
+    fun clearError() { _uiState.value = _uiState.value.copy(error = null) }
 }

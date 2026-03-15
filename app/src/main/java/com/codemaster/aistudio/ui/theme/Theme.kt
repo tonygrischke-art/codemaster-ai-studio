@@ -1,66 +1,41 @@
 package com.codemaster.aistudio.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// Dark theme - GitHub-inspired dark with blue/orange accents
-private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF58A6FF),          // Blue accent
-    onPrimary = Color(0xFF0D1117),
-    primaryContainer = Color(0xFF1F3A5C),
-    onPrimaryContainer = Color(0xFFADD8FF),
-    secondary = Color(0xFFFF8C42),        // Orange accent
-    onSecondary = Color(0xFF1A0800),
-    secondaryContainer = Color(0xFF5C2800),
-    onSecondaryContainer = Color(0xFFFFDBCC),
-    tertiary = Color(0xFF3FB950),         // Green for success/run
+private val DarkColors = darkColorScheme(
+    primary = Color(0xFF7C4DFF),
+    secondary = Color(0xFF00BCD4),
     background = Color(0xFF0D1117),
-    onBackground = Color(0xFFE6EDF3),
     surface = Color(0xFF161B22),
+    surfaceVariant = Color(0xFF1C2128),
+    onBackground = Color(0xFFE6EDF3),
     onSurface = Color(0xFFE6EDF3),
-    surfaceVariant = Color(0xFF21262D),
     onSurfaceVariant = Color(0xFF8B949E),
+    primaryContainer = Color(0xFF2D1F63),
+    secondaryContainer = Color(0xFF003947),
     outline = Color(0xFF30363D),
-    error = Color(0xFFF85149),
-    onError = Color(0xFF1A0000),
+    outlineVariant = Color(0xFF21262D)
 )
 
-// Light theme
-private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF0969DA),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFDEEFFF),
-    onPrimaryContainer = Color(0xFF001D36),
-    secondary = Color(0xFFE36200),
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFFFDCC8),
-    onSecondaryContainer = Color(0xFF2D1500),
-    tertiary = Color(0xFF1A7F37),
-    background = Color(0xFFFFFFFF),
-    onBackground = Color(0xFF1F2328),
-    surface = Color(0xFFF6F8FA),
-    onSurface = Color(0xFF1F2328),
-    surfaceVariant = Color(0xFFEAEEF2),
-    onSurfaceVariant = Color(0xFF57606A),
-    outline = Color(0xFFD0D7DE),
-    error = Color(0xFFCF222E),
-    onError = Color(0xFFFFFFFF),
+private val LightColors = lightColorScheme(
+    primary = Color(0xFF6200EE),
+    secondary = Color(0xFF03DAC6),
+    background = Color(0xFFFAFAFA),
+    surface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFFF3F4F6),
+    onBackground = Color(0xFF1A1A1A),
+    onSurface = Color(0xFF1A1A1A),
+    primaryContainer = Color(0xFFEDE7F6),
+    secondaryContainer = Color(0xFFE0F7FA),
+    outline = Color(0xFFD0D7DE)
 )
 
 @Composable
-fun CodeMasterTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit
-) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-
+fun CodeMasterTheme(darkTheme: Boolean = true, content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = colorScheme,
-        typography = CodeMasterTypography,
+        colorScheme = if (darkTheme) DarkColors else LightColors,
         content = content
     )
 }
