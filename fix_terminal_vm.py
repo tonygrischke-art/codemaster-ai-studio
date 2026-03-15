@@ -1,4 +1,11 @@
-package com.codemaster.aistudio.ui.screens.terminal
+#!/usr/bin/env python3
+import os
+
+path = os.path.expanduser(
+    "~/codemaster-ai-studio/app/src/main/java/com/codemaster/aistudio/ui/screens/terminal/TerminalViewModel.kt"
+)
+
+content = r"""package com.codemaster.aistudio.ui.screens.terminal
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
@@ -282,3 +289,14 @@ class TerminalViewModel @Inject constructor(
         try { writer?.close(); process?.destroy() } catch (_: Exception) {}
     }
 }
+"""
+
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(content)
+
+print("OK TerminalViewModel.kt rewritten")
+print("\nNow run:")
+print("  git add -A")
+print("  git commit -m 'fix: rewrite TerminalViewModel fix smart cast'")
+print("  git push origin HEAD")
