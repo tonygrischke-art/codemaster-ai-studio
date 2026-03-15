@@ -1,5 +1,8 @@
 package com.codemaster.aistudio.ui.screens.build
 
+import androidx.compose.animation.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -23,19 +27,12 @@ import com.codemaster.aistudio.ui.screens.settings.SettingsViewModel
 fun BuildScreen(
     projectId: Long,
     onBack: () -> Unit,
-    settingsViewModel: SettingsViewModel = hiltViewModel()
+    onGoToSettings: () -> Unit = {},
+    viewModel: BuildViewModel = hiltViewModel()
 ) {
-    val settingsState by settingsViewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
-
-    val buildLogs = remember { mutableStateListOf<String>() }
-    var buildStatus by remember { mutableStateOf("idle") }
-
-    LaunchedEffect(Unit) {
-        buildLogs.add("[CodeMaster] Build system ready.")
-        buildLogs.add("[CodeMaster] Configure your GitHub token in Settings to trigger builds.")
-        buildLogs.add("[CodeMaster] Repository: github.com/tonygrischke-art/codemaster-ai-studio")
-    }
+    var showSetupGuide by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -43,135 +40,296 @@ fun BuildScreen(
                 title = { Text("Build", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
+                },
+                actions = {
+                    IconButton(onClick = { showSetupGuide = !showSetupGuide }) {
+                        Icon(Icons.Default.Help, "Setup guide")
+                    }
+                    IconButton(onClick = { viewModel.refreshStatus() }) {
+                        Icon(Icons.Default.Refresh, "Refresh status")
+                    }
                 }
             )
         }
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(scrollState),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(scrollState),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Status Card
-            Card(
+
+            // ── Setup guide (expandable) ───────────────────────────────
+            AnimatedVisibility(visible = showSetupGuide) {
+                SetupGuideCard(onGoToSettings = onGoToSettings)
+            }
+
+            // ── Config status card ─────────────────────────────────────
+            ConfigStatusCard(
+                isConfigured = uiState.isConfigured,
+                owner = uiState.owner,
+                repo = uiState.repo,
+                branch = uiState.branch,
+                onGoToSettings = onGoToSettings
+            )
+
+            // ── BIG TRIGGER BUTTON ─────────────────────────────────────
+            Button(
+                onClick = { viewModel.triggerBuild() },
+                enabled = uiState.isConfigured && !uiState.isTriggering,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = when (buildStatus) {
-                        "success" -> Color(0xFF1B5E20)
-                        "failure" -> MaterialTheme.colorScheme.errorContainer
-                        "in_progress" -> MaterialTheme.colorScheme.primaryContainer
-                        else -> MaterialTheme.colorScheme.surfaceVariant
-                    }
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
                 )
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        when (buildStatus) {
-                            "success" -> Icons.Default.CheckCircle
-                            "failure" -> Icons.Default.Error
-                            "in_progress" -> Icons.Default.Sync
-                            else -> Icons.Default.Circle
-                        },
-                        contentDescription = null,
-                        tint = when (buildStatus) {
-                            "success" -> Color(0xFF69F0AE)
-                            "failure" -> MaterialTheme.colorScheme.error
-                            "in_progress" -> MaterialTheme.colorScheme.primary
-                            else -> MaterialTheme.colorScheme.outline
-                        }
+                if (uiState.isTriggering) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color.White,
+                        strokeWidth = 3.dp
                     )
                     Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text("Build Status", fontWeight = FontWeight.Bold)
+                    Text("Triggering Build...", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                } else {
+                    Icon(Icons.Default.RocketLaunch, null, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text("🚀 Trigger GitHub Build", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            if (!uiState.isConfigured) {
+                Text(
+                    "⚠️ Configure GitHub settings first — tap ⚙️ or the Help button above",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
+
+            // ── Trigger result message ────────────────────────────────
+            uiState.triggerMessage?.let { msg ->
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (msg.startsWith("✅"))
+                            Color(0xFF1B5E20) else MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(
+                            if (msg.startsWith("✅")) Icons.Default.CheckCircle else Icons.Default.Error,
+                            null,
+                            tint = if (msg.startsWith("✅")) Color(0xFF69F0AE) else MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.width(12.dp))
                         Text(
-                            buildStatus.replaceFirstChar { it.uppercase() },
-                            style = MaterialTheme.typography.bodySmall
+                            msg,
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium
                         )
                     }
                 }
             }
 
-            // Action Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Button(
-                    onClick = {
-                        buildStatus = "in_progress"
-                        buildLogs.add("[${System.currentTimeMillis()}] Triggering GitHub Actions build...")
-                        buildLogs.add("Push a commit to main branch or configure workflow_dispatch.")
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Trigger Build")
-                }
-                OutlinedButton(
-                    onClick = {
-                        buildLogs.clear()
-                        buildStatus = "idle"
-                        buildLogs.add("[CodeMaster] Logs cleared.")
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Delete, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Clear")
+            // ── Latest run status ──────────────────────────────────────
+            uiState.latestRunStatus?.let { status ->
+                Card(shape = RoundedCornerShape(12.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Timeline, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Latest Run", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(status, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                    }
                 }
             }
 
-            // Build Info
+            // ── Build config info ──────────────────────────────────────
             Card(shape = RoundedCornerShape(12.dp)) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Build Configuration", fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Settings, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Build Configuration", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                    }
                     HorizontalDivider()
-                    BuildInfoRow("Workflow", "Build CodeMaster AI Studio APK")
-                    BuildInfoRow("Branch", "main")
-                    BuildInfoRow("Runner", "ubuntu-latest")
-                    BuildInfoRow("JDK", "17")
-                    BuildInfoRow("Gradle", "8.4")
-                    BuildInfoRow("Output", "app-debug.apk")
+                    BuildInfoRow("Runner",   "ubuntu-latest")
+                    BuildInfoRow("JDK",      "17 (Temurin)")
+                    BuildInfoRow("Gradle",   "8.4")
+                    BuildInfoRow("Output",   "app-debug.apk")
+                    BuildInfoRow("Retained", "14 days")
+                    BuildInfoRow("Owner",    uiState.owner.ifBlank { "Not set" })
+                    BuildInfoRow("Repo",     uiState.repo.ifBlank { "Not set" })
+                    BuildInfoRow("Branch",   uiState.branch.ifBlank { "main" })
                 }
             }
 
-            // Log Output
-            Text("Build Log", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E))
-            ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                    buildLogs.forEach { log ->
-                        Text(
-                            text = log,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                            color = Color(0xFF00FF41),
-                            lineHeight = 16.sp
-                        )
+            // ── Log output ─────────────────────────────────────────────
+            if (uiState.logs.isNotEmpty()) {
+                Text("Activity Log", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1117))
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                        uiState.logs.forEach { log ->
+                            Text(log, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = Color(0xFF58A6FF), lineHeight = 16.sp)
+                        }
                     }
                 }
             }
 
-            // GitHub Actions Link info
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+// ── Setup Guide Card ───────────────────────────────────────────────────────
+@Composable
+fun SetupGuideCard(onGoToSettings: () -> Unit) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.MenuBook, null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(8.dp))
+                Text("Setup Guide", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            }
+            HorizontalDivider()
+
+            SetupStep(
+                number = "1",
+                title = "Create GitHub Account",
+                description = "Go to github.com and sign up if you haven't already."
+            )
+            SetupStep(
+                number = "2",
+                title = "Create a Repository",
+                description = "On GitHub: New → Repository name: codemaster-ai-studio → Public → Create. Or use your existing repo."
+            )
+            SetupStep(
+                number = "3",
+                title = "Add Workflow File",
+                description = "Your repo needs .github/workflows/build.yml — this is already in your repo from the setup we did."
+            )
+            SetupStep(
+                number = "4",
+                title = "Create Personal Access Token",
+                description = "GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token → Check: repo + workflow scopes → Generate → COPY IT NOW (shown once only)."
+            )
+            SetupStep(
+                number = "5",
+                title = "Enter Settings in This App",
+                description = "Go to Settings → GitHub section → Enter your token, GitHub username, repo name, and branch (main)."
+            )
+            SetupStep(
+                number = "6",
+                title = "Trigger Your First Build",
+                description = "Come back here and tap 🚀 Trigger GitHub Build. Watch GitHub Actions at github.com/YOUR_USERNAME/YOUR_REPO/actions"
+            )
+            SetupStep(
+                number = "7",
+                title = "Download Your APK",
+                description = "When build turns green ✅ → click the run → Artifacts → Download CodeMaster-debug-apk → install on device."
+            )
+
+            Button(
+                onClick = onGoToSettings,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                    Spacer(Modifier.width(12.dp))
+                Icon(Icons.Default.Settings, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Go to Settings to Enter Token")
+            }
+        }
+    }
+}
+
+@Composable
+fun SetupStep(number: String, title: String, description: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.primary),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(number, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+fun ConfigStatusCard(
+    isConfigured: Boolean,
+    owner: String,
+    repo: String,
+    branch: String,
+    onGoToSettings: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isConfigured)
+                Color(0xFF1B5E20).copy(alpha = 0.3f)
+            else
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                if (isConfigured) Icons.Default.CheckCircle else Icons.Default.Warning,
+                null,
+                tint = if (isConfigured) Color(0xFF69F0AE) else MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    if (isConfigured) "GitHub configured ✅" else "GitHub not configured",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                if (isConfigured) {
                     Text(
-                        "Monitor live builds at:
-github.com/tonygrischke-art/codemaster-ai-studio/actions",
+                        "$owner/$repo @ $branch",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        "Token, username, and repo required",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
+            }
+            IconButton(onClick = onGoToSettings) {
+                Icon(Icons.Default.Settings, "Settings")
             }
         }
     }
@@ -180,7 +338,7 @@ github.com/tonygrischke-art/codemaster-ai-studio/actions",
 @Composable
 fun BuildInfoRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth()) {
-        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(100.dp))
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(80.dp))
         Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
     }
 }

@@ -43,7 +43,6 @@ fun NavGraph(navController: NavHostController) {
                 onOpenSettings = { navController.navigate(Screen.Settings.route) }
             )
         }
-
         composable(
             Screen.Chat.route,
             arguments = listOf(navArgument("projectId") { type = NavType.LongType; defaultValue = -1L })
@@ -53,7 +52,6 @@ fun NavGraph(navController: NavHostController) {
                 onBack = { navController.popBackStack() }
             )
         }
-
         composable(
             Screen.Editor.route,
             arguments = listOf(
@@ -62,24 +60,23 @@ fun NavGraph(navController: NavHostController) {
             )
         ) { back ->
             CodeEditorScreen(
-                projectId     = back.arguments?.getLong("projectId") ?: -1L,
-                fileId        = back.arguments?.getLong("fileId") ?: -1L,
-                onBack        = { navController.popBackStack() },
-                onOpenChat    = { navController.navigate(Screen.Chat.createRoute(it)) },
+                projectId      = back.arguments?.getLong("projectId") ?: -1L,
+                fileId         = back.arguments?.getLong("fileId") ?: -1L,
+                onBack         = { navController.popBackStack() },
+                onOpenChat     = { navController.navigate(Screen.Chat.createRoute(it)) },
                 onOpenTerminal = { navController.navigate(Screen.Terminal.createRoute(it)) }
             )
         }
-
         composable(
             Screen.Build.route,
             arguments = listOf(navArgument("projectId") { type = NavType.LongType; defaultValue = -1L })
         ) { back ->
             BuildScreen(
-                projectId = back.arguments?.getLong("projectId") ?: -1L,
-                onBack    = { navController.popBackStack() }
+                projectId     = back.arguments?.getLong("projectId") ?: -1L,
+                onBack        = { navController.popBackStack() },
+                onGoToSettings = { navController.navigate(Screen.Settings.route) }
             )
         }
-
         composable(
             Screen.Terminal.route,
             arguments = listOf(navArgument("projectId") { type = NavType.LongType; defaultValue = -1L })
@@ -89,7 +86,6 @@ fun NavGraph(navController: NavHostController) {
                 onBack    = { navController.popBackStack() }
             )
         }
-
         composable(Screen.Settings.route) {
             SettingsScreen(onBack = { navController.popBackStack() })
         }

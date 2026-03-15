@@ -24,6 +24,7 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showApiKey by remember { mutableStateOf(false) }
+    var showGithubToken by remember { mutableStateOf(false) }
     var modelExpanded by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
 
@@ -50,7 +51,8 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(scrollState),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // AI Settings
+
+            // ── AI Configuration ───────────────────────────────────────
             SettingsSection(title = "AI Configuration", icon = Icons.Default.AutoAwesome) {
                 OutlinedTextField(
                     value = uiState.apiKey,
@@ -66,18 +68,20 @@ fun SettingsScreen(
                     },
                     singleLine = true
                 )
+                Text(
+                    "Get your free key at: console.groq.com",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
                 Spacer(Modifier.height(4.dp))
 
-                ExposedDropdownMenuBox(
-                    expanded = modelExpanded,
-                    onExpandedChange = { modelExpanded = it }
-                ) {
+                ExposedDropdownMenuBox(expanded = modelExpanded, onExpandedChange = { modelExpanded = it }) {
                     OutlinedTextField(
                         value = uiState.model,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Model") },
+                        label = { Text("AI Model") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelExpanded) },
                         modifier = Modifier.fillMaxWidth().menuAnchor()
                     )
@@ -86,25 +90,82 @@ fun SettingsScreen(
                             DropdownMenuItem(
                                 text = { Text(model) },
                                 onClick = { viewModel.updateModel(model); modelExpanded = false },
-                                trailingIcon = {
-                                    if (model == uiState.model) Icon(Icons.Default.Check, null)
-                                }
+                                trailingIcon = { if (model == uiState.model) Icon(Icons.Default.Check, null) }
                             )
                         }
                     }
                 }
             }
 
-            // Appearance
-            SettingsSection(title = "Appearance", icon = Icons.Default.Palette) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+            // ── GitHub Configuration ───────────────────────────────────
+            SettingsSection(title = "GitHub — Build Trigger", icon = Icons.Default.CloudUpload) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("How to get your token:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                        Text("1. Go to github.com → your avatar → Settings", style = MaterialTheme.typography.labelSmall)
+                        Text("2. Developer settings → Personal access tokens → Tokens (classic)", style = MaterialTheme.typography.labelSmall)
+                        Text("3. Generate new token → check: repo + workflow", style = MaterialTheme.typography.labelSmall)
+                        Text("4. Copy and paste below — it's only shown ONCE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+
+                Spacer(Modifier.height(4.dp))
+
+                OutlinedTextField(
+                    value = uiState.githubToken,
+                    onValueChange = { viewModel.updateGithubToken(it) },
+                    label = { Text("GitHub Personal Access Token") },
+                    placeholder = { Text("github_pat_...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = if (showGithubToken) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showGithubToken = !showGithubToken }) {
+                            Icon(if (showGithubToken) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+                        }
+                    },
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = uiState.githubOwner,
+                    onValueChange = { viewModel.updateGithubOwner(it) },
+                    label = { Text("GitHub Username") },
+                    placeholder = { Text("tonygrischke-art") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Person, null) }
+                )
+
+                OutlinedTextField(
+                    value = uiState.githubRepo,
+                    onValueChange = { viewModel.updateGithubRepo(it) },
+                    label = { Text("Repository Name") },
+                    placeholder = { Text("codemaster-ai-studio") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.FolderOpen, null) }
+                )
+
+                OutlinedTextField(
+                    value = uiState.githubBranch,
+                    onValueChange = { viewModel.updateGithubBranch(it) },
+                    label = { Text("Branch") },
+                    placeholder = { Text("main") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.AccountTree, null) }
+                )
+            }
+
+            // ── Appearance ─────────────────────────────────────────────
+            SettingsSection(title = "Appearance", icon = Icons.Default.Palette) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         if (uiState.isDarkTheme) Icons.Default.DarkMode else Icons.Default.LightMode,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
+                        null, tint = MaterialTheme.colorScheme.primary
                     )
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
@@ -115,15 +176,15 @@ fun SettingsScreen(
                 }
             }
 
-            // About
+            // ── About ──────────────────────────────────────────────────
             SettingsSection(title = "About", icon = Icons.Default.Info) {
-                AboutRow("Version", "1.0.0 Phase 2")
-                AboutRow("Build", "Groq-powered")
+                AboutRow("Version", "2.0.0 Phase 4")
+                AboutRow("AI",      "Groq API")
+                AboutRow("Build",   "GitHub Actions")
                 AboutRow("Package", "com.codemaster.aistudio")
-                AboutRow("Repo", "github.com/tonygrischke-art/codemaster-ai-studio")
             }
 
-            // Save Button
+            // ── Save Button ────────────────────────────────────────────
             Button(
                 onClick = { viewModel.saveSettings() },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -131,8 +192,10 @@ fun SettingsScreen(
             ) {
                 Icon(Icons.Default.Save, null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Save Settings", fontWeight = FontWeight.Bold)
+                Text("Save All Settings", fontWeight = FontWeight.Bold)
             }
+
+            Spacer(Modifier.height(32.dp))
         }
     }
 }

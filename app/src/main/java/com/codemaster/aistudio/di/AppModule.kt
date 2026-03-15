@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import com.codemaster.aistudio.data.CodeMasterDatabase
+import com.codemaster.aistudio.data.api.GitHubApiService
 import com.codemaster.aistudio.data.api.GroqApiService
 import com.codemaster.aistudio.data.dao.ChatMessageDao
 import com.codemaster.aistudio.data.dao.CodeFileDao
@@ -20,6 +21,7 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
+import javax.inject.Named
 import javax.inject.Singleton
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "codemaster_prefs")
@@ -34,34 +36,39 @@ object AppModule {
             .fallbackToDestructiveMigration()
             .build()
 
-    @Provides @Singleton
-    fun provideProjectDao(db: CodeMasterDatabase): ProjectDao = db.projectDao()
+    @Provides @Singleton fun provideProjectDao(db: CodeMasterDatabase): ProjectDao = db.projectDao()
+    @Provides @Singleton fun provideChatMessageDao(db: CodeMasterDatabase): ChatMessageDao = db.chatMessageDao()
+    @Provides @Singleton fun provideCodeFileDao(db: CodeMasterDatabase): CodeFileDao = db.codeFileDao()
 
     @Provides @Singleton
-    fun provideChatMessageDao(db: CodeMasterDatabase): ChatMessageDao = db.chatMessageDao()
-
-    @Provides @Singleton
-    fun provideCodeFileDao(db: CodeMasterDatabase): CodeFileDao = db.codeFileDao()
-
-    @Provides @Singleton
-    fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
-        context.dataStore
+    fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> = context.dataStore
 
     @Provides @Singleton
     fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
-        .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY })
+        .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC })
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    @Provides @Singleton
-    fun provideRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
+    @Provides @Singleton @Named("groq")
+    fun provideGroqRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
         .baseUrl("https://api.groq.com/")
         .client(client)
         .addConverterFactory(GsonConverterFactory.create())
         .build()
 
+    @Provides @Singleton @Named("github")
+    fun provideGitHubRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
+        .baseUrl("https://api.github.com/")
+        .client(client)
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+
     @Provides @Singleton
-    fun provideGroqApiService(retrofit: Retrofit): GroqApiService =
+    fun provideGroqApiService(@Named("groq") retrofit: Retrofit): GroqApiService =
         retrofit.create(GroqApiService::class.java)
+
+    @Provides @Singleton
+    fun provideGitHubApiService(@Named("github") retrofit: Retrofit): GitHubApiService =
+        retrofit.create(GitHubApiService::class.java)
 }

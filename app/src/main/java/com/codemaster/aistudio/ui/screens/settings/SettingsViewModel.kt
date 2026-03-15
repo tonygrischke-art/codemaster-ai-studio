@@ -14,6 +14,10 @@ data class SettingsUiState(
     val apiKey: String = "",
     val model: String = "llama-3.3-70b-versatile",
     val isDarkTheme: Boolean = true,
+    val githubToken: String = "",
+    val githubOwner: String = "",
+    val githubRepo: String = "",
+    val githubBranch: String = "main",
     val isSaved: Boolean = false
 )
 
@@ -34,23 +38,36 @@ class SettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                apiKey = settingsRepository.getApiKey(),
-                model = settingsRepository.getModel(),
-                isDarkTheme = settingsRepository.getDarkTheme()
+            _uiState.value = SettingsUiState(
+                apiKey       = settingsRepository.getApiKey(),
+                model        = settingsRepository.getModel(),
+                isDarkTheme  = settingsRepository.getDarkTheme(),
+                githubToken  = settingsRepository.getGitHubToken(),
+                githubOwner  = settingsRepository.getGitHubOwner(),
+                githubRepo   = settingsRepository.getGitHubRepo(),
+                githubBranch = settingsRepository.getGitHubBranch().ifBlank { "main" }
             )
         }
     }
 
-    fun updateApiKey(key: String) { _uiState.value = _uiState.value.copy(apiKey = key, isSaved = false) }
-    fun updateModel(model: String) { _uiState.value = _uiState.value.copy(model = model, isSaved = false) }
-    fun toggleTheme() { _uiState.value = _uiState.value.copy(isDarkTheme = !_uiState.value.isDarkTheme, isSaved = false) }
+    fun updateApiKey(k: String)       { _uiState.value = _uiState.value.copy(apiKey = k, isSaved = false) }
+    fun updateModel(m: String)        { _uiState.value = _uiState.value.copy(model = m, isSaved = false) }
+    fun toggleTheme()                 { _uiState.value = _uiState.value.copy(isDarkTheme = !_uiState.value.isDarkTheme, isSaved = false) }
+    fun updateGithubToken(t: String)  { _uiState.value = _uiState.value.copy(githubToken = t, isSaved = false) }
+    fun updateGithubOwner(o: String)  { _uiState.value = _uiState.value.copy(githubOwner = o, isSaved = false) }
+    fun updateGithubRepo(r: String)   { _uiState.value = _uiState.value.copy(githubRepo = r, isSaved = false) }
+    fun updateGithubBranch(b: String) { _uiState.value = _uiState.value.copy(githubBranch = b, isSaved = false) }
 
     fun saveSettings() {
         viewModelScope.launch {
-            settingsRepository.saveApiKey(_uiState.value.apiKey)
-            settingsRepository.saveModel(_uiState.value.model)
-            settingsRepository.saveDarkTheme(_uiState.value.isDarkTheme)
+            val s = _uiState.value
+            settingsRepository.saveApiKey(s.apiKey)
+            settingsRepository.saveModel(s.model)
+            settingsRepository.saveDarkTheme(s.isDarkTheme)
+            settingsRepository.saveGitHubToken(s.githubToken)
+            settingsRepository.saveGitHubOwner(s.githubOwner)
+            settingsRepository.saveGitHubRepo(s.githubRepo)
+            settingsRepository.saveGitHubBranch(s.githubBranch.ifBlank { "main" })
             _uiState.value = _uiState.value.copy(isSaved = true)
         }
     }

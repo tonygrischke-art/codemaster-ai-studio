@@ -1,178 +1,81 @@
 package com.codemaster.aistudio.data.repository
 
-import android.content.Context
-import dagger.hilt.android.qualifiers.ApplicationContext
+import com.codemaster.aistudio.data.api.GitHubApiService
+import com.codemaster.aistudio.data.api.WorkflowDispatchRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.net.HttpURLConnection
-import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
 
-data class BuildStatus(
-    val id: Long,
-    val status: String,       // "queued", "in_progress", "completed"
-    val conclusion: String?,  // "success", "failure", "cancelled"
-    val name: String,
-    val createdAt: String,
-    val updatedAt: String,
-    val htmlUrl: String,
-    val artifactsUrl: String? = null
-)
-
-data class BuildArtifact(
-    val id: Long,
-    val name: String,
-    val sizeInBytes: Long,
-    val downloadUrl: String,
-    val expiresAt: String
-)
-
 @Singleton
 class GitHubActionsRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+    private val gitHubApiService: GitHubApiService,
     private val settingsRepository: SettingsRepository
 ) {
-
-    // ─── Trigger a new build ───────────────────────────────────
-    suspend fun triggerBuild(): FileResult<String> = withContext(Dispatchers.IO) {
+    suspend fun triggerBuild(): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val token = settingsRepository.getGitHubToken()
-            val repo = settingsRepository.getGitHubRepo() // "owner/repo"
+            val token  = settingsRepository.getGitHubToken()
+            val owner  = settingsRepository.getGitHubOwner()
+            val repo   = settingsRepository.getGitHubRepo()
+            val branch = settingsRepository.getGitHubBranch()
 
-            if (token.isBlank() || repo.isBlank()) {
-                return@withContext FileResult.Error(
-                    "GitHub token or repo not configured. Go to Settings."
-                )
+            if (token.isBlank())  return@withContext Result.failure(Exception("GitHub token not set. Go to Settings → GitHub."))
+            if (owner.isBlank())  return@withContext Result.failure(Exception("GitHub username not set. Go to Settings → GitHub."))
+            if (repo.isBlank())   return@withContext Result.failure(Exception("Repository name not set. Go to Settings → GitHub."))
+
+            // Find the workflow file name
+            val workflowsResult = runCatching {
+                gitHubApiService.listWorkflows("Bearer $token", owner, repo)
             }
+            if (workflowsResult.isFailure)
+                return@withContext Result.failure(Exception("Could not list workflows. Check token and repo name."))
 
-            val url = URL("https://api.github.com/repos/$repo/actions/workflows/build.yml/dispatches")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Authorization", "Bearer $token")
-            conn.setRequestProperty("Accept", "application/vnd.github+json")
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
-            conn.doOutput = true
+            val workflows = workflowsResult.getOrThrow()
+            val workflow = workflows.workflows.firstOrNull {
+                it.name.contains("Build", ignoreCase = true) ||
+                it.path.contains("build", ignoreCase = true)
+            } ?: workflows.workflows.firstOrNull()
+            ?: return@withContext Result.failure(Exception("No workflows found in repo. Push your .github/workflows/build.yml first."))
 
-            val body = JSONObject().apply {
-                put("ref", "main")
-            }.toString()
+            gitHubApiService.triggerWorkflow(
+                token    = "Bearer $token",
+                owner    = owner,
+                repo     = repo,
+                workflowId = workflow.id.toString(),
+                body     = WorkflowDispatchRequest(ref = branch)
+            )
 
-            conn.outputStream.write(body.toByteArray())
-            conn.outputStream.flush()
-
-            val responseCode = conn.responseCode
-            conn.disconnect()
-
-            if (responseCode == 204) {
-                FileResult.Success("Build triggered successfully!")
-            } else {
-                FileResult.Error("Failed to trigger build (HTTP $responseCode)")
-            }
+            Result.success("✅ Build triggered! Workflow: ${workflow.name}\nCheck GitHub Actions for progress.")
         } catch (e: Exception) {
-            FileResult.Error("Network error: ${e.message}", e)
+            Result.failure(Exception("Trigger failed: ${e.message}"))
         }
     }
 
-    // ─── List recent workflow runs ─────────────────────────────
-    suspend fun getRecentBuilds(): FileResult<List<BuildStatus>> = withContext(Dispatchers.IO) {
+    suspend fun getLatestRun(): Result<String> = withContext(Dispatchers.IO) {
         try {
             val token = settingsRepository.getGitHubToken()
-            val repo = settingsRepository.getGitHubRepo()
+            val owner = settingsRepository.getGitHubOwner()
+            val repo  = settingsRepository.getGitHubRepo()
 
-            if (token.isBlank() || repo.isBlank()) {
-                return@withContext FileResult.Error("GitHub not configured in Settings.")
+            if (token.isBlank() || owner.isBlank() || repo.isBlank())
+                return@withContext Result.failure(Exception("Configure GitHub settings first."))
+
+            val runs = gitHubApiService.getWorkflowRuns("Bearer $token", owner, repo)
+            val latest = runs.workflowRuns.firstOrNull()
+                ?: return@withContext Result.success("No runs found yet.")
+
+            val status = when {
+                latest.conclusion == "success"    -> "✅ SUCCESS"
+                latest.conclusion == "failure"    -> "❌ FAILED"
+                latest.conclusion == "cancelled"  -> "⚠️ CANCELLED"
+                latest.status == "in_progress"    -> "🔄 IN PROGRESS"
+                latest.status == "queued"         -> "⏳ QUEUED"
+                else -> latest.status.uppercase()
             }
 
-            val url = URL("https://api.github.com/repos/$repo/actions/runs?per_page=10")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.setRequestProperty("Authorization", "Bearer $token")
-            conn.setRequestProperty("Accept", "application/vnd.github+json")
-            conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
-
-            val responseCode = conn.responseCode
-            if (responseCode != 200) {
-                conn.disconnect()
-                return@withContext FileResult.Error("Failed to fetch builds (HTTP $responseCode)")
-            }
-
-            val response = BufferedReader(InputStreamReader(conn.inputStream)).readText()
-            conn.disconnect()
-
-            val json = JSONObject(response)
-            val runs = json.getJSONArray("workflow_runs")
-            val builds = mutableListOf<BuildStatus>()
-
-            for (i in 0 until runs.length()) {
-                val run = runs.getJSONObject(i)
-                builds.add(
-                    BuildStatus(
-                        id = run.getLong("id"),
-                        status = run.getString("status"),
-                        conclusion = if (run.isNull("conclusion")) null else run.getString("conclusion"),
-                        name = run.getString("display_title"),
-                        createdAt = run.getString("created_at"),
-                        updatedAt = run.getString("updated_at"),
-                        htmlUrl = run.getString("html_url"),
-                        artifactsUrl = run.optString("artifacts_url")
-                    )
-                )
-            }
-
-            FileResult.Success(builds)
+            Result.success("$status\n${latest.name}\nCommit: ${latest.headSha.take(7)}\nStarted: ${latest.createdAt}")
         } catch (e: Exception) {
-            FileResult.Error("Network error: ${e.message}", e)
+            Result.failure(Exception("Status check failed: ${e.message}"))
         }
     }
-
-    // ─── Get artifacts for a run ───────────────────────────────
-    suspend fun getArtifacts(runId: Long): FileResult<List<BuildArtifact>> =
-        withContext(Dispatchers.IO) {
-            try {
-                val token = settingsRepository.getGitHubToken()
-                val repo = settingsRepository.getGitHubRepo()
-
-                val url = URL("https://api.github.com/repos/$repo/actions/runs/$runId/artifacts")
-                val conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "GET"
-                conn.setRequestProperty("Authorization", "Bearer $token")
-                conn.setRequestProperty("Accept", "application/vnd.github+json")
-                conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
-
-                val responseCode = conn.responseCode
-                if (responseCode != 200) {
-                    conn.disconnect()
-                    return@withContext FileResult.Error("Failed to fetch artifacts (HTTP $responseCode)")
-                }
-
-                val response = BufferedReader(InputStreamReader(conn.inputStream)).readText()
-                conn.disconnect()
-
-                val json = JSONObject(response)
-                val items = json.getJSONArray("artifacts")
-                val artifacts = mutableListOf<BuildArtifact>()
-
-                for (i in 0 until items.length()) {
-                    val item = items.getJSONObject(i)
-                    artifacts.add(
-                        BuildArtifact(
-                            id = item.getLong("id"),
-                            name = item.getString("name"),
-                            sizeInBytes = item.getLong("size_in_bytes"),
-                            downloadUrl = item.getString("archive_download_url"),
-                            expiresAt = item.getString("expires_at")
-                        )
-                    )
-                }
-
-                FileResult.Success(artifacts)
-            } catch (e: Exception) {
-                FileResult.Error("Network error: ${e.message}", e)
-            }
-        }
 }

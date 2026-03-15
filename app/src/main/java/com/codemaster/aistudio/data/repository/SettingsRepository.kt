@@ -14,29 +14,33 @@ class SettingsRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>
 ) {
     companion object {
-        val API_KEY = stringPreferencesKey("groq_api_key")
-        val MODEL = stringPreferencesKey("groq_model")
-        val DARK_THEME = booleanPreferencesKey("dark_theme")
+        val API_KEY       = stringPreferencesKey("groq_api_key")
+        val MODEL         = stringPreferencesKey("groq_model")
+        val DARK_THEME    = booleanPreferencesKey("dark_theme")
+        val GITHUB_TOKEN  = stringPreferencesKey("github_token")
+        val GITHUB_OWNER  = stringPreferencesKey("github_owner")
+        val GITHUB_REPO   = stringPreferencesKey("github_repo")
+        val GITHUB_BRANCH = stringPreferencesKey("github_branch")
     }
 
-    suspend fun getApiKey(): String =
-        dataStore.data.first()[API_KEY] ?: ""
+    suspend fun getApiKey(): String       = dataStore.data.first()[API_KEY] ?: ""
+    suspend fun saveApiKey(k: String)     { dataStore.edit { it[API_KEY] = k } }
 
-    suspend fun saveApiKey(key: String) {
-        dataStore.edit { it[API_KEY] = key }
-    }
+    suspend fun getModel(): String        = dataStore.data.first()[MODEL] ?: "llama-3.3-70b-versatile"
+    suspend fun saveModel(m: String)      { dataStore.edit { it[MODEL] = m } }
 
-    suspend fun getModel(): String =
-        dataStore.data.first()[MODEL] ?: "llama-3.3-70b-versatile"
+    suspend fun getDarkTheme(): Boolean   = dataStore.data.first()[DARK_THEME] ?: true
+    suspend fun saveDarkTheme(d: Boolean) { dataStore.edit { it[DARK_THEME] = d } }
 
-    suspend fun saveModel(model: String) {
-        dataStore.edit { it[MODEL] = model }
-    }
+    suspend fun getGitHubToken(): String  = dataStore.data.first()[GITHUB_TOKEN] ?: ""
+    suspend fun saveGitHubToken(t: String){ dataStore.edit { it[GITHUB_TOKEN] = t } }
 
-    suspend fun getDarkTheme(): Boolean =
-        dataStore.data.first()[DARK_THEME] ?: true
+    suspend fun getGitHubOwner(): String  = dataStore.data.first()[GITHUB_OWNER] ?: ""
+    suspend fun saveGitHubOwner(o: String){ dataStore.edit { it[GITHUB_OWNER] = o } }
 
-    suspend fun saveDarkTheme(dark: Boolean) {
-        dataStore.edit { it[DARK_THEME] = dark }
-    }
+    suspend fun getGitHubRepo(): String   = dataStore.data.first()[GITHUB_REPO] ?: ""
+    suspend fun saveGitHubRepo(r: String) { dataStore.edit { it[GITHUB_REPO] = r } }
+
+    suspend fun getGitHubBranch(): String = dataStore.data.first()[GITHUB_BRANCH] ?: "main"
+    suspend fun saveGitHubBranch(b: String){ dataStore.edit { it[GITHUB_BRANCH] = b } }
 }
