@@ -1,6 +1,5 @@
 package com.codemaster.aistudio.ui.screens.chat
 
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.codemaster.aistudio.data.model.ChatMessage
@@ -67,8 +66,9 @@ class AiChatViewModel @Inject constructor(
         if (text.isBlank() && state.attachedFileContent == null) return
         if (state.isLoading) return
 
-        val displayText = if (state.attachedFileName != null) "$text
-📎 ${state.attachedFileName}" else text
+        val attachedName = state.attachedFileName
+        val displayText = if (attachedName != null) "$text
+📎 $attachedName" else text
 
         viewModelScope.launch {
             val userMessage = ChatMessage(
@@ -76,10 +76,15 @@ class AiChatViewModel @Inject constructor(
                 role = "user",
                 content = displayText,
                 tokenCount = aiRepository.estimateTokens(displayText),
-                attachedFileName = state.attachedFileName
+                attachedFileName = attachedName
             )
             chatRepository.saveMessage(userMessage)
-            _uiState.value = state.copy(inputText = "", isLoading = true, attachedFileName = null, attachedFileContent = null)
+            _uiState.value = state.copy(
+                inputText = "",
+                isLoading = true,
+                attachedFileName = null,
+                attachedFileContent = null
+            )
 
             val result = aiRepository.sendMessage(
                 history = _uiState.value.messages.dropLast(1),
@@ -106,9 +111,7 @@ class AiChatViewModel @Inject constructor(
     }
 
     fun clearHistory() {
-        viewModelScope.launch {
-            chatRepository.clearMessagesForProject(currentProjectId)
-        }
+        viewModelScope.launch { chatRepository.clearMessagesForProject(currentProjectId) }
     }
 
     fun clearError() { _uiState.value = _uiState.value.copy(error = null) }

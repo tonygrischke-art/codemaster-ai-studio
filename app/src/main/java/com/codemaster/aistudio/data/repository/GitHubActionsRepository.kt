@@ -19,11 +19,10 @@ class GitHubActionsRepository @Inject constructor(
             val repo   = settingsRepository.getGitHubRepo()
             val branch = settingsRepository.getGitHubBranch()
 
-            if (token.isBlank())  return@withContext Result.failure(Exception("GitHub token not set. Go to Settings → GitHub."))
-            if (owner.isBlank())  return@withContext Result.failure(Exception("GitHub username not set. Go to Settings → GitHub."))
-            if (repo.isBlank())   return@withContext Result.failure(Exception("Repository name not set. Go to Settings → GitHub."))
+            if (token.isBlank())  return@withContext Result.failure(Exception("GitHub token not set. Go to Settings."))
+            if (owner.isBlank())  return@withContext Result.failure(Exception("GitHub username not set. Go to Settings."))
+            if (repo.isBlank())   return@withContext Result.failure(Exception("Repository name not set. Go to Settings."))
 
-            // Find the workflow file name
             val workflowsResult = runCatching {
                 gitHubApiService.listWorkflows("Bearer $token", owner, repo)
             }
@@ -35,17 +34,18 @@ class GitHubActionsRepository @Inject constructor(
                 it.name.contains("Build", ignoreCase = true) ||
                 it.path.contains("build", ignoreCase = true)
             } ?: workflows.workflows.firstOrNull()
-            ?: return@withContext Result.failure(Exception("No workflows found in repo. Push your .github/workflows/build.yml first."))
+            ?: return@withContext Result.failure(Exception("No workflows found in repo."))
 
             gitHubApiService.triggerWorkflow(
-                token    = "Bearer $token",
-                owner    = owner,
-                repo     = repo,
+                token      = "Bearer $token",
+                owner      = owner,
+                repo       = repo,
                 workflowId = workflow.id.toString(),
-                body     = WorkflowDispatchRequest(ref = branch)
+                body       = WorkflowDispatchRequest(ref = branch)
             )
 
-            Result.success("✅ Build triggered! Workflow: ${workflow.name}\nCheck GitHub Actions for progress.")
+            Result.success("Build triggered! Workflow: ${workflow.name}
+Check GitHub Actions for progress.")
         } catch (e: Exception) {
             Result.failure(Exception("Trigger failed: ${e.message}"))
         }
@@ -65,15 +65,18 @@ class GitHubActionsRepository @Inject constructor(
                 ?: return@withContext Result.success("No runs found yet.")
 
             val status = when {
-                latest.conclusion == "success"    -> "✅ SUCCESS"
-                latest.conclusion == "failure"    -> "❌ FAILED"
-                latest.conclusion == "cancelled"  -> "⚠️ CANCELLED"
-                latest.status == "in_progress"    -> "🔄 IN PROGRESS"
-                latest.status == "queued"         -> "⏳ QUEUED"
+                latest.conclusion == "success"   -> "SUCCESS"
+                latest.conclusion == "failure"   -> "FAILED"
+                latest.conclusion == "cancelled" -> "CANCELLED"
+                latest.status == "in_progress"   -> "IN PROGRESS"
+                latest.status == "queued"        -> "QUEUED"
                 else -> latest.status.uppercase()
             }
 
-            Result.success("$status\n${latest.name}\nCommit: ${latest.headSha.take(7)}\nStarted: ${latest.createdAt}")
+            Result.success("$status
+${latest.name}
+Commit: ${latest.headSha.take(7)}
+Started: ${latest.createdAt}")
         } catch (e: Exception) {
             Result.failure(Exception("Status check failed: ${e.message}"))
         }

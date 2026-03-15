@@ -146,9 +146,7 @@ fun ChatBubble(message: ChatMessage) {
     ) {
         if (!isUser) {
             Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp))
                     .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
@@ -176,11 +174,12 @@ fun ChatBubble(message: ChatMessage) {
             ) {
                 SelectionContainer {
                     if (!isUser && message.content.contains("```")) {
-                        CodeAwareText(message.content, isUser)
+                        CodeAwareText(message.content)
                     } else {
                         Text(
                             text = message.content,
-                            color = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (isUser) MaterialTheme.colorScheme.onPrimary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 14.sp
                         )
                     }
@@ -200,7 +199,11 @@ fun ChatBubble(message: ChatMessage) {
                         onClick = { clipboardManager.setText(AnnotatedString(message.content)) },
                         modifier = Modifier.size(24.dp)
                     ) {
-                        Icon(Icons.Default.ContentCopy, "Copy", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.outline)
+                        Icon(
+                            Icons.Default.ContentCopy, "Copy",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.outline
+                        )
                     }
                 }
             }
@@ -211,7 +214,7 @@ fun ChatBubble(message: ChatMessage) {
 }
 
 @Composable
-fun CodeAwareText(content: String, isUser: Boolean) {
+fun CodeAwareText(content: String) {
     val clipboardManager = LocalClipboardManager.current
     val parts = content.split("```")
     Column {
@@ -226,7 +229,12 @@ fun CodeAwareText(content: String, isUser: Boolean) {
                 }
             } else {
                 val lines = part.lines()
-                val code = if (lines.firstOrNull()?.all { it.isLetter() } == true) lines.drop(1).joinToString("\n") else part
+                val code = if (lines.firstOrNull()?.all { it.isLetter() } == true) {
+                    lines.drop(1).joinToString("
+")
+                } else {
+                    part
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -279,13 +287,20 @@ fun TypingIndicator() {
 
 @Composable
 fun ChatEmptyState(modifier: Modifier = Modifier) {
-    Column(modifier = modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier = modifier.padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(16.dp))
         Text("CodeMaster AI", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp))
-        Text("Ask me anything about your code.
-Attach files for context.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            "Ask me anything about your code.
+Attach files for context.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }
 
@@ -299,10 +314,7 @@ fun ChatInputBar(
     onClearAttachment: () -> Unit,
     onSend: () -> Unit
 ) {
-    Surface(
-        tonalElevation = 4.dp,
-        shadowElevation = 8.dp
-    ) {
+    Surface(tonalElevation = 4.dp, shadowElevation = 8.dp) {
         Column(modifier = Modifier.navigationBarsPadding()) {
             AnimatedVisibility(visible = attachedFileName != null) {
                 attachedFileName?.let { name ->
@@ -329,8 +341,7 @@ fun ChatInputBar(
             ) {
                 IconButton(onClick = onAttach, enabled = !isLoading) {
                     Icon(
-                        Icons.Default.AttachFile,
-                        "Attach file",
+                        Icons.Default.AttachFile, "Attach file",
                         tint = if (attachedFileName != null) MaterialTheme.colorScheme.primary
                                else MaterialTheme.colorScheme.onSurfaceVariant
                     )

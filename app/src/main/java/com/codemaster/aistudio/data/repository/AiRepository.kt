@@ -25,7 +25,6 @@ class AiRepository @Inject constructor(
             if (apiKey.isBlank()) return@withContext Result.failure(Exception("No API key set. Go to Settings."))
 
             val model = settingsRepository.getModel()
-
             val messages = mutableListOf<GroqMessage>()
             messages.add(GroqMessage("system", systemPrompt))
 
