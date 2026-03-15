@@ -121,9 +121,8 @@ class TerminalViewModel @Inject constructor(
 
                     launch {
                         try {
-                            var line: String?
                             while (isActive) {
-                                line = stdout.readLine() ?: break
+                                val line = stdout.readLine() ?: break
                                 appendLine(TerminalLine(stripAnsi(line), LineType.OUTPUT))
                             }
                         } catch (_: Exception) {}
@@ -131,9 +130,8 @@ class TerminalViewModel @Inject constructor(
 
                     launch {
                         try {
-                            var line: String?
                             while (isActive) {
-                                line = stderr.readLine() ?: break
+                                val line = stderr.readLine() ?: break
                                 appendLine(TerminalLine(stripAnsi(line), LineType.ERROR))
                             }
                         } catch (_: Exception) {}
