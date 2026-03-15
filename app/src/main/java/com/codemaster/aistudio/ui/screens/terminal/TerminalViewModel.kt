@@ -72,10 +72,12 @@ class TerminalViewModel @Inject constructor(
         appendLine(TerminalLine("║     CodeMaster AI Studio Terminal      ║", LineType.SYSTEM))
         appendLine(TerminalLine("╚════════════════════════════════════════╝", LineType.SYSTEM))
         appendLine(TerminalLine("Shell: $shellPath", LineType.SYSTEM))
-        appendLine(TerminalLine(
-            if (isTermuxAvailable) "Termux environment detected" else "Using Android system shell",
-            LineType.SYSTEM
-        ))
+        val termuxMsg = if (isTermuxAvailable) {
+            "Termux environment detected"
+        } else {
+            "Using Android system shell"
+        }
+        appendLine(TerminalLine(termuxMsg, LineType.SYSTEM))
         appendLine(TerminalLine("Type 'help' for built-in commands", LineType.SYSTEM))
         appendLine(TerminalLine("", LineType.SYSTEM))
 
@@ -146,7 +148,9 @@ class TerminalViewModel @Inject constructor(
         }
     }
 
-    fun updateInput(text: String) { _uiState.value = _uiState.value.copy(input = text) }
+    fun updateInput(text: String) {
+        _uiState.value = _uiState.value.copy(input = text)
+    }
 
     fun submitCommand() {
         val cmd = _uiState.value.input.trim()
@@ -171,8 +175,7 @@ class TerminalViewModel @Inject constructor(
         if (_uiState.value.isRunning && writer != null) {
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    writer?.write("$cmd
-")
+                    writer?.write(cmd + "\n")
                     writer?.flush()
                 } catch (e: Exception) {
                     appendLine(TerminalLine("Error: ${e.message}", LineType.ERROR))
@@ -187,7 +190,10 @@ class TerminalViewModel @Inject constructor(
         val history = _uiState.value.history
         if (history.isEmpty()) return
         val newIndex = (_uiState.value.historyIndex + 1).coerceAtMost(history.size - 1)
-        _uiState.value = _uiState.value.copy(input = history[history.size - 1 - newIndex], historyIndex = newIndex)
+        _uiState.value = _uiState.value.copy(
+            input = history[history.size - 1 - newIndex],
+            historyIndex = newIndex
+        )
     }
 
     fun historyDown() {
@@ -196,33 +202,36 @@ class TerminalViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(input = "", historyIndex = -1)
         } else {
             val history = _uiState.value.history
-            _uiState.value = _uiState.value.copy(input = history[history.size - 1 - newIndex], historyIndex = newIndex)
+            _uiState.value = _uiState.value.copy(
+                input = history[history.size - 1 - newIndex],
+                historyIndex = newIndex
+            )
         }
     }
 
     fun sendCtrlC() {
         viewModelScope.launch(Dispatchers.IO) {
-            try { writer?.write(""); writer?.flush() } catch (_: Exception) {}
+            try { writer?.write("\u0003"); writer?.flush() } catch (_: Exception) {}
         }
         appendLine(TerminalLine("^C", LineType.SYSTEM))
     }
 
     fun sendCtrlD() {
         viewModelScope.launch(Dispatchers.IO) {
-            try { writer?.write(""); writer?.flush() } catch (_: Exception) {}
+            try { writer?.write("\u0004"); writer?.flush() } catch (_: Exception) {}
         }
     }
 
     fun sendTab() {
         viewModelScope.launch(Dispatchers.IO) {
-            try { writer?.write("	"); writer?.flush() } catch (_: Exception) {}
+            try { writer?.write("\t"); writer?.flush() } catch (_: Exception) {}
         }
     }
 
     private fun runBuiltinCommand(cmd: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val parts = cmd.trim().split("\s+".toRegex())
+                val parts = cmd.trim().split("\\s+".toRegex())
                 val result = when (parts[0]) {
                     "echo"   -> parts.drop(1).joinToString(" ")
                     "pwd"    -> _uiState.value.cwd
@@ -232,13 +241,14 @@ class TerminalViewModel @Inject constructor(
                     "ls" -> {
                         val dir = File(if (parts.size > 1) parts[1] else _uiState.value.cwd)
                         dir.listFiles()?.joinToString("  ") { f ->
-                            if (f.isDirectory) "${f.name}/" else f.name
+                            if (f.isDirectory) f.name + "/" else f.name
                         } ?: "Cannot list directory"
                     }
                     "cat" -> {
                         if (parts.size < 2) "Usage: cat <file>"
-                        else File(_uiState.value.cwd, parts[1]).let {
-                            if (it.exists()) it.readText() else "No such file: ${parts[1]}"
+                        else {
+                            val f = File(_uiState.value.cwd, parts[1])
+                            if (f.exists()) f.readText() else "No such file: " + parts[1]
                         }
                     }
                     "cd" -> {
@@ -247,13 +257,15 @@ class TerminalViewModel @Inject constructor(
                                 if (isTermuxAvailable) "/data/data/com.termux/files/home"
                                 else context.filesDir.absolutePath
                             parts[1].startsWith("/") -> parts[1]
-                            else -> "${_uiState.value.cwd}/${parts[1]}"
+                            else -> _uiState.value.cwd + "/" + parts[1]
                         }
                         val dir = File(target)
                         if (dir.exists() && dir.isDirectory) {
                             _uiState.value = _uiState.value.copy(cwd = dir.canonicalPath)
                             ""
-                        } else "cd: $target: No such directory"
+                        } else {
+                            "cd: " + target + ": No such directory"
+                        }
                     }
                     "mkdir" -> {
                         if (parts.size < 2) "Usage: mkdir <dir>"
@@ -263,8 +275,7 @@ class TerminalViewModel @Inject constructor(
                         if (parts.size < 2) "Usage: rm <file>"
                         else { File(_uiState.value.cwd, parts[1]).delete(); "" }
                     }
-                    "env" -> System.getenv().entries.joinToString("
-") { "${it.key}=${it.value}" }
+                    "env" -> System.getenv().entries.joinToString("\n") { it.key + "=" + it.value }
                     else -> {
                         val proc = Runtime.getRuntime().exec(cmd)
                         val out = proc.inputStream.bufferedReader().readText()
@@ -278,17 +289,19 @@ class TerminalViewModel @Inject constructor(
                     result.lines().forEach { line -> appendLine(TerminalLine(line, LineType.OUTPUT)) }
                 }
             } catch (e: Exception) {
-                appendLine(TerminalLine("${e.message ?: "command failed"}", LineType.ERROR))
+                appendLine(TerminalLine(e.message ?: "command failed", LineType.ERROR))
             }
         }
     }
 
     private fun showHelp() {
-        listOf(
-            "Built-in: clear, cd, ls, cat, mkdir, rm, pwd, echo, env, uname, whoami, date",
-            if (isTermuxAvailable) "Termux shell active - all pkg commands available"
-            else "No Termux detected - install Termux for full shell access"
-        ).forEach { appendLine(TerminalLine(it, LineType.SYSTEM)) }
+        val termuxStatus = if (isTermuxAvailable) {
+            "Termux shell active - all pkg commands available"
+        } else {
+            "No Termux detected - install Termux for full shell access"
+        }
+        appendLine(TerminalLine("Built-in: clear, cd, ls, cat, mkdir, rm, pwd, echo, env, uname, whoami, date", LineType.SYSTEM))
+        appendLine(TerminalLine(termuxStatus, LineType.SYSTEM))
     }
 
     private fun appendLine(line: TerminalLine) {
@@ -299,8 +312,8 @@ class TerminalViewModel @Inject constructor(
     }
 
     private fun stripAnsi(text: String): String =
-        text.replace(Regex("\[[;\d]*[A-Za-z]"), "")
-            .replace(Regex("\][^]*"), "")
+        text.replace(Regex("\u001B\\[[;\\d]*[A-Za-z]"), "")
+            .replace(Regex("\u001B\\][^\u0007]*\u0007"), "")
 
     override fun onCleared() {
         super.onCleared()

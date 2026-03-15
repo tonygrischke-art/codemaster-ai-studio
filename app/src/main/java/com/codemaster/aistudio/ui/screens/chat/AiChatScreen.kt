@@ -51,13 +51,19 @@ fun AiChatScreen(
         }
     }
 
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
         uri?.let {
-            val fileName = context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
-                val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                cursor.moveToFirst()
-                cursor.getString(nameIndex)
-            } ?: "attachment"
+            val fileName = context.contentResolver
+                .query(it, null, null, null, null)
+                ?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(
+                        android.provider.OpenableColumns.DISPLAY_NAME
+                    )
+                    cursor.moveToFirst()
+                    cursor.getString(nameIndex)
+                } ?: "attachment"
             val content = context.contentResolver.openInputStream(it)?.use { stream ->
                 BufferedReader(InputStreamReader(stream)).readText()
             } ?: ""
@@ -79,7 +85,9 @@ fun AiChatScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, "Back")
+                    }
                 },
                 actions = {
                     IconButton(onClick = { viewModel.clearHistory() }) {
@@ -99,7 +107,8 @@ fun AiChatScreen(
                 onSend = {
                     viewModel.sendMessage()
                     scope.launch {
-                        if (uiState.messages.isNotEmpty()) listState.animateScrollToItem(uiState.messages.size)
+                        if (uiState.messages.isNotEmpty())
+                            listState.animateScrollToItem(uiState.messages.size)
                     }
                 }
             )
@@ -128,7 +137,9 @@ fun AiChatScreen(
             uiState.error?.let { error ->
                 Snackbar(
                     modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp),
-                    action = { TextButton(onClick = viewModel::clearError) { Text("OK") } }
+                    action = {
+                        TextButton(onClick = viewModel::clearError) { Text("OK") }
+                    }
                 ) { Text(error) }
             }
         }
@@ -146,7 +157,9 @@ fun ChatBubble(message: ChatMessage) {
     ) {
         if (!isUser) {
             Box(
-                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp))
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(8.dp))
                     .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
@@ -161,9 +174,9 @@ fun ChatBubble(message: ChatMessage) {
                     .clip(
                         RoundedCornerShape(
                             topStart = if (isUser) 16.dp else 4.dp,
-                            topEnd = if (isUser) 4.dp else 16.dp,
+                            topEnd   = if (isUser) 4.dp else 16.dp,
                             bottomStart = 16.dp,
-                            bottomEnd = 16.dp
+                            bottomEnd   = 16.dp
                         )
                     )
                     .background(
@@ -196,7 +209,9 @@ fun ChatBubble(message: ChatMessage) {
                     )
                     Spacer(Modifier.width(4.dp))
                     IconButton(
-                        onClick = { clipboardManager.setText(AnnotatedString(message.content)) },
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(message.content))
+                        },
                         modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
@@ -230,8 +245,7 @@ fun CodeAwareText(content: String) {
             } else {
                 val lines = part.lines()
                 val code = if (lines.firstOrNull()?.all { it.isLetter() } == true) {
-                    lines.drop(1).joinToString("
-")
+                    lines.drop(1).joinToString("\n")
                 } else {
                     part
                 }
@@ -249,10 +263,15 @@ fun CodeAwareText(content: String) {
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
-                        onClick = { clipboardManager.setText(AnnotatedString(code.trim())) },
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(code.trim()))
+                        },
                         modifier = Modifier.align(Alignment.TopEnd).size(28.dp)
                     ) {
-                        Icon(Icons.Default.ContentCopy, "Copy code", modifier = Modifier.size(16.dp))
+                        Icon(
+                            Icons.Default.ContentCopy, "Copy code",
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
             }
@@ -268,7 +287,9 @@ fun TypingIndicator() {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp))
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.primary),
             contentAlignment = Alignment.Center
         ) {
@@ -276,7 +297,10 @@ fun TypingIndicator() {
         }
         Spacer(Modifier.width(8.dp))
         Card(shape = RoundedCornerShape(16.dp)) {
-            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
                 Text("Thinking...", style = MaterialTheme.typography.bodySmall)
@@ -291,13 +315,20 @@ fun ChatEmptyState(modifier: Modifier = Modifier) {
         modifier = modifier.padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
+        Icon(
+            Icons.Default.AutoAwesome, null,
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
         Spacer(Modifier.height(16.dp))
-        Text("CodeMaster AI", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+        Text(
+            "CodeMaster AI",
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleLarge
+        )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Ask me anything about your code.
-Attach files for context.",
+            "Ask me anything about your code." + "\n" + "Attach files for context.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium
         )
@@ -325,10 +356,22 @@ fun ChatInputBar(
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                        Icon(
+                            Icons.Default.AttachFile, null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
                         Spacer(Modifier.width(8.dp))
-                        Text(name, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSecondaryContainer)
-                        IconButton(onClick = onClearAttachment, modifier = Modifier.size(24.dp)) {
+                        Text(
+                            name,
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        IconButton(
+                            onClick = onClearAttachment,
+                            modifier = Modifier.size(24.dp)
+                        ) {
                             Icon(Icons.Default.Close, "Remove", modifier = Modifier.size(16.dp))
                         }
                     }
@@ -336,7 +379,9 @@ fun ChatInputBar(
             }
 
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
                 IconButton(onClick = onAttach, enabled = !isLoading) {
@@ -361,7 +406,11 @@ fun ChatInputBar(
                     modifier = Modifier.size(48.dp)
                 ) {
                     if (isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
                     } else {
                         Icon(Icons.Default.Send, "Send")
                     }

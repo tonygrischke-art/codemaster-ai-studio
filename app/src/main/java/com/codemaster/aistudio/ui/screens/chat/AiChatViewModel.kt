@@ -47,7 +47,9 @@ class AiChatViewModel @Inject constructor(
         }
     }
 
-    fun updateInput(text: String) { _uiState.value = _uiState.value.copy(inputText = text) }
+    fun updateInput(text: String) {
+        _uiState.value = _uiState.value.copy(inputText = text)
+    }
 
     fun attachFile(fileName: String, content: String) {
         _uiState.value = _uiState.value.copy(
@@ -57,7 +59,10 @@ class AiChatViewModel @Inject constructor(
     }
 
     fun clearAttachment() {
-        _uiState.value = _uiState.value.copy(attachedFileName = null, attachedFileContent = null)
+        _uiState.value = _uiState.value.copy(
+            attachedFileName = null,
+            attachedFileContent = null
+        )
     }
 
     fun sendMessage() {
@@ -67,8 +72,12 @@ class AiChatViewModel @Inject constructor(
         if (state.isLoading) return
 
         val attachedName = state.attachedFileName
-        val displayText = if (attachedName != null) "$text
-📎 $attachedName" else text
+        val newline = "\n"
+        val displayText = if (attachedName != null) {
+            text + newline + "📎 " + attachedName
+        } else {
+            text
+        }
 
         viewModelScope.launch {
             val userMessage = ChatMessage(
@@ -111,8 +120,12 @@ class AiChatViewModel @Inject constructor(
     }
 
     fun clearHistory() {
-        viewModelScope.launch { chatRepository.clearMessagesForProject(currentProjectId) }
+        viewModelScope.launch {
+            chatRepository.clearMessagesForProject(currentProjectId)
+        }
     }
 
-    fun clearError() { _uiState.value = _uiState.value.copy(error = null) }
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(error = null)
+    }
 }
