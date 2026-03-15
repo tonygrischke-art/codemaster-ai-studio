@@ -32,12 +32,9 @@ class AiRepository @Inject constructor(
                 messages.add(GroqMessage(msg.role, msg.content))
             }
 
+            val nl = "\n"
             val finalUserMessage = if (attachedFileContent != null) {
-                "$userMessage
-
-<attached_file>
-$attachedFileContent
-</attached_file>"
+                userMessage + nl + nl + "<attached_file>" + nl + attachedFileContent + nl + "</attached_file>"
             } else {
                 userMessage
             }
