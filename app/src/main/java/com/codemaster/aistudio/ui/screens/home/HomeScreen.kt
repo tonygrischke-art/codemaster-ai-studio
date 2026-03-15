@@ -25,7 +25,7 @@ import com.codemaster.aistudio.data.model.Project
 import java.text.SimpleDateFormat
 import java.util.*
 
-val LANGUAGES = listOf("Kotlin", "Java", "Python", "JavaScript", "TypeScript", "Rust", "Go", "C++", "Swift", "Dart")
+val LANGUAGES = listOf("Kotlin","Java","Python","JavaScript","TypeScript","Rust","Go","C++","Swift","Dart","PHP","Ruby")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,6 +33,7 @@ fun HomeScreen(
     onOpenChat: (Long) -> Unit,
     onOpenEditor: (Long) -> Unit,
     onOpenBuild: (Long) -> Unit,
+    onOpenTerminal: (Long) -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
@@ -43,25 +44,22 @@ fun HomeScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Code, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.Code, null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.width(8.dp))
                         Text("CodeMaster AI", fontWeight = FontWeight.Bold)
                     }
                 },
                 actions = {
                     IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        Icon(Icons.Default.Settings, "Settings")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                }
             )
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { viewModel.showNewProjectDialog() },
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                icon = { Icon(Icons.Default.Add, null) },
                 text = { Text("New Project") },
                 containerColor = MaterialTheme.colorScheme.primary
             )
@@ -69,12 +67,8 @@ fun HomeScreen(
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
-                uiState.isLoading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                }
-                uiState.projects.isEmpty() -> {
-                    EmptyProjectsPlaceholder(modifier = Modifier.align(Alignment.Center))
-                }
+                uiState.isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                uiState.projects.isEmpty() -> EmptyProjectsPlaceholder(modifier = Modifier.align(Alignment.Center))
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -85,17 +79,17 @@ fun HomeScreen(
                             Text(
                                 "Projects (${uiState.projects.size})",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(bottom = 4.dp)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         items(uiState.projects, key = { it.id }) { project ->
                             ProjectCard(
                                 project = project,
-                                onOpenChat = { onOpenChat(project.id) },
-                                onOpenEditor = { onOpenEditor(project.id) },
-                                onOpenBuild = { onOpenBuild(project.id) },
-                                onDelete = { viewModel.deleteProject(project) }
+                                onOpenChat     = { onOpenChat(project.id) },
+                                onOpenEditor   = { onOpenEditor(project.id) },
+                                onOpenBuild    = { onOpenBuild(project.id) },
+                                onOpenTerminal = { onOpenTerminal(project.id) },
+                                onDelete       = { viewModel.deleteProject(project) }
                             )
                         }
                         item { Spacer(Modifier.height(80.dp)) }
@@ -113,14 +107,14 @@ fun HomeScreen(
 
         if (uiState.showNewProjectDialog) {
             NewProjectDialog(
-                name = uiState.newProjectName,
-                language = uiState.newProjectLanguage,
+                name        = uiState.newProjectName,
+                language    = uiState.newProjectLanguage,
                 description = uiState.newProjectDescription,
-                onNameChange = viewModel::updateProjectName,
-                onLanguageChange = viewModel::updateProjectLanguage,
+                onNameChange        = viewModel::updateProjectName,
+                onLanguageChange    = viewModel::updateProjectLanguage,
                 onDescriptionChange = viewModel::updateProjectDescription,
-                onCreate = { viewModel.createProject { id -> onOpenEditor(id) } },
-                onDismiss = viewModel::hideNewProjectDialog
+                onCreate   = { viewModel.createProject { id -> onOpenEditor(id) } },
+                onDismiss  = viewModel::hideNewProjectDialog
             )
         }
     }
@@ -132,6 +126,7 @@ fun ProjectCard(
     onOpenChat: () -> Unit,
     onOpenEditor: () -> Unit,
     onOpenBuild: () -> Unit,
+    onOpenTerminal: () -> Unit,
     onDelete: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -145,41 +140,24 @@ fun ProjectCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(
-                            Brush.linearGradient(
-                                listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
-                            )
-                        ),
+                    modifier = Modifier.size(42.dp).clip(RoundedCornerShape(10.dp))
+                        .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary))),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = project.language.take(2).uppercase(),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
+                    Text(project.language.take(2).uppercase(), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(project.name, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        "${project.language} • ${dateFormat.format(Date(project.lastModified))}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text("${project.language} • ${dateFormat.format(Date(project.lastModified))}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Box {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More")
-                    }
+                    IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, null) }
                     DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                         DropdownMenuItem(
-                            text = { Text("Delete") },
+                            text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
                             onClick = { showMenu = false; onDelete() },
-                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) }
+                            leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
                         )
                     }
                 }
@@ -187,40 +165,28 @@ fun ProjectCard(
 
             if (project.description.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    project.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Text(project.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
 
             Spacer(Modifier.height(12.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            HorizontalDivider()
             Spacer(Modifier.height(8.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                ProjectActionButton(icon = Icons.Default.ChatBubbleOutline, label = "Chat", onClick = onOpenChat)
-                ProjectActionButton(icon = Icons.Default.Code, label = "Editor", onClick = onOpenEditor)
-                ProjectActionButton(icon = Icons.Default.Build, label = "Build", onClick = onOpenBuild)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                ProjectActionButton(Icons.Default.ChatBubbleOutline, "Chat",     onOpenChat)
+                ProjectActionButton(Icons.Default.Code,              "Editor",   onOpenEditor)
+                ProjectActionButton(Icons.Default.Terminal,          "Terminal", onOpenTerminal)
+                ProjectActionButton(Icons.Default.Build,             "Build",    onOpenBuild)
             }
         }
     }
 }
 
 @Composable
-fun ProjectActionButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit
-) {
+fun ProjectActionButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
     TextButton(onClick = onClick) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, contentDescription = label, modifier = Modifier.size(20.dp))
+            Icon(icon, label, modifier = Modifier.size(20.dp))
             Text(label, style = MaterialTheme.typography.labelSmall)
         }
     }
@@ -228,16 +194,8 @@ fun ProjectActionButton(
 
 @Composable
 fun EmptyProjectsPlaceholder(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            Icons.Default.FolderOpen,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.outlineVariant
-        )
+    Column(modifier = modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outlineVariant)
         Spacer(Modifier.height(16.dp))
         Text("No projects yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
         Text("Tap + to create your first project", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -247,14 +205,9 @@ fun EmptyProjectsPlaceholder(modifier: Modifier = Modifier) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewProjectDialog(
-    name: String,
-    language: String,
-    description: String,
-    onNameChange: (String) -> Unit,
-    onLanguageChange: (String) -> Unit,
-    onDescriptionChange: (String) -> Unit,
-    onCreate: () -> Unit,
-    onDismiss: () -> Unit
+    name: String, language: String, description: String,
+    onNameChange: (String) -> Unit, onLanguageChange: (String) -> Unit, onDescriptionChange: (String) -> Unit,
+    onCreate: () -> Unit, onDismiss: () -> Unit
 ) {
     var langExpanded by remember { mutableStateOf(false) }
 
@@ -263,51 +216,19 @@ fun NewProjectDialog(
         title = { Text("New Project", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = onNameChange,
-                    label = { Text("Project Name *") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-                ExposedDropdownMenuBox(
-                    expanded = langExpanded,
-                    onExpandedChange = { langExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        value = language,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Language") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = langExpanded) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor()
-                    )
+                OutlinedTextField(value = name, onValueChange = onNameChange, label = { Text("Project Name *") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                ExposedDropdownMenuBox(expanded = langExpanded, onExpandedChange = { langExpanded = it }) {
+                    OutlinedTextField(value = language, onValueChange = {}, readOnly = true, label = { Text("Language") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(langExpanded) }, modifier = Modifier.fillMaxWidth().menuAnchor())
                     ExposedDropdownMenu(expanded = langExpanded, onDismissRequest = { langExpanded = false }) {
                         LANGUAGES.forEach { lang ->
-                            DropdownMenuItem(
-                                text = { Text(lang) },
-                                onClick = { onLanguageChange(lang); langExpanded = false }
-                            )
+                            DropdownMenuItem(text = { Text(lang) }, onClick = { onLanguageChange(lang); langExpanded = false })
                         }
                     }
                 }
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = onDescriptionChange,
-                    label = { Text("Description (optional)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                    maxLines = 3
-                )
+                OutlinedTextField(value = description, onValueChange = onDescriptionChange, label = { Text("Description (optional)") }, modifier = Modifier.fillMaxWidth(), minLines = 2, maxLines = 3)
             }
         },
-        confirmButton = {
-            Button(onClick = onCreate, enabled = name.isNotBlank()) {
-                Text("Create")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
+        confirmButton = { Button(onClick = onCreate, enabled = name.isNotBlank()) { Text("Create") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }

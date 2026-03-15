@@ -2,9 +2,9 @@ package com.codemaster.aistudio.ui.screens.editor
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.codemaster.aistudio.data.dao.CodeFileDao
 import com.codemaster.aistudio.data.model.CodeFile
 import com.codemaster.aistudio.data.repository.ProjectRepository
-import com.codemaster.aistudio.data.dao.CodeFileDao
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +22,8 @@ data class EditorUiState(
     val showFileTree: Boolean = true,
     val showNewFileDialog: Boolean = false,
     val newFileName: String = "",
+    val cursorLine: Int = 1,
+    val cursorCol: Int = 1,
     val error: String? = null,
     val projectName: String = ""
 )
@@ -42,7 +44,6 @@ class CodeEditorViewModel @Inject constructor(
         viewModelScope.launch {
             val project = projectRepository.getProjectById(projectId)
             _uiState.value = _uiState.value.copy(projectName = project?.name ?: "Editor")
-
             codeFileDao.getFilesForProject(projectId)
                 .catch { }
                 .collect { files ->
@@ -56,11 +57,21 @@ class CodeEditorViewModel @Inject constructor(
     }
 
     fun openFile(file: CodeFile) {
-        _uiState.value = _uiState.value.copy(currentFile = file, content = file.content, isDirty = false)
+        _uiState.value = _uiState.value.copy(
+            currentFile = file,
+            content = file.content,
+            isDirty = false,
+            cursorLine = 1,
+            cursorCol = 1
+        )
     }
 
     fun updateContent(content: String) {
         _uiState.value = _uiState.value.copy(content = content, isDirty = true)
+    }
+
+    fun updateCursor(line: Int, col: Int) {
+        _uiState.value = _uiState.value.copy(cursorLine = line, cursorCol = col)
     }
 
     fun saveCurrentFile() {
@@ -68,7 +79,9 @@ class CodeEditorViewModel @Inject constructor(
         val file = state.currentFile ?: return
         viewModelScope.launch {
             _uiState.value = state.copy(isSaving = true)
-            codeFileDao.updateFile(file.copy(content = state.content, lastModified = System.currentTimeMillis()))
+            codeFileDao.updateFile(
+                file.copy(content = state.content, lastModified = System.currentTimeMillis())
+            )
             _uiState.value = _uiState.value.copy(isSaving = false, isDirty = false)
         }
     }
@@ -82,20 +95,18 @@ class CodeEditorViewModel @Inject constructor(
         val name = _uiState.value.newFileName.trim()
         if (name.isBlank()) return
         viewModelScope.launch {
-            val language = when {
-                name.endsWith(".kt") -> "kotlin"
-                name.endsWith(".java") -> "java"
-                name.endsWith(".py") -> "python"
-                name.endsWith(".js") || name.endsWith(".ts") -> "javascript"
-                name.endsWith(".xml") -> "xml"
-                else -> "text"
+            val language = when (name.substringAfterLast('.').lowercase()) {
+                "kt","kts" -> "kotlin"; "java" -> "java"; "py" -> "python"
+                "js","jsx","ts","tsx" -> "javascript"; "xml" -> "xml"
+                "json" -> "json"; "md" -> "markdown"; "sh" -> "shell"
+                "html" -> "html"; "css","scss" -> "css"; "rs" -> "rust"
+                "go" -> "go"; "dart" -> "dart"; else -> "text"
             }
             val id = codeFileDao.insertFile(
                 CodeFile(projectId = currentProjectId, name = name, path = name, language = language)
             )
             hideNewFileDialog()
-            val file = codeFileDao.getFileById(id)
-            file?.let { openFile(it) }
+            codeFileDao.getFileById(id)?.let { openFile(it) }
         }
     }
 
