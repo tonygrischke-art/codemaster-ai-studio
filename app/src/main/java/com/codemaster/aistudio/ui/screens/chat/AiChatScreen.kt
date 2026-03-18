@@ -46,53 +46,36 @@ fun AiChatScreen(
 
     LaunchedEffect(projectId) { viewModel.init(projectId) }
     LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty()) {
+        if (uiState.messages.isNotEmpty())
             listState.animateScrollToItem(uiState.messages.size - 1)
-        }
     }
 
-    val filePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let {
-            val fileName = context.contentResolver
-                .query(it, null, null, null, null)
-                ?.use { cursor ->
-                    val nameIndex = cursor.getColumnIndex(
-                        android.provider.OpenableColumns.DISPLAY_NAME
-                    )
-                    cursor.moveToFirst()
-                    cursor.getString(nameIndex)
-                } ?: "attachment"
-            val content = context.contentResolver.openInputStream(it)?.use { stream ->
-                BufferedReader(InputStreamReader(stream)).readText()
+            val fileName = context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
+                val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                cursor.moveToFirst(); cursor.getString(idx)
+            } ?: "attachment"
+            val content = context.contentResolver.openInputStream(it)?.use { s ->
+                BufferedReader(InputStreamReader(s)).readText()
             } ?: ""
             viewModel.attachFile(fileName, content.take(8000))
         }
     }
 
     Scaffold(
+        modifier = Modifier.imePadding(),   // ← keyboard pushes content up
         topBar = {
             TopAppBar(
                 title = {
                     Column {
                         Text("AI Chat", fontWeight = FontWeight.Bold)
-                        Text(
-                            "~${uiState.totalTokens} tokens used",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text("~${uiState.totalTokens} tokens", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, "Back")
-                    }
-                },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") } },
                 actions = {
-                    IconButton(onClick = { viewModel.clearHistory() }) {
-                        Icon(Icons.Default.DeleteSweep, "Clear history")
-                    }
+                    IconButton(onClick = { viewModel.clearHistory() }) { Icon(Icons.Default.DeleteSweep, "Clear") }
                 }
             )
         },
@@ -106,10 +89,7 @@ fun AiChatScreen(
                 onClearAttachment = viewModel::clearAttachment,
                 onSend = {
                     viewModel.sendMessage()
-                    scope.launch {
-                        if (uiState.messages.isNotEmpty())
-                            listState.animateScrollToItem(uiState.messages.size)
-                    }
+                    scope.launch { if (uiState.messages.isNotEmpty()) listState.animateScrollToItem(uiState.messages.size) }
                 }
             )
         }
@@ -124,22 +104,15 @@ fun AiChatScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(uiState.messages, key = { it.id }) { message ->
-                        ChatBubble(message = message)
-                    }
-                    if (uiState.isLoading) {
-                        item { TypingIndicator() }
-                    }
+                    items(uiState.messages, key = { it.id }) { message -> ChatBubble(message = message) }
+                    if (uiState.isLoading) { item { TypingIndicator() } }
                     item { Spacer(Modifier.height(8.dp)) }
                 }
             }
-
             uiState.error?.let { error ->
                 Snackbar(
                     modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp),
-                    action = {
-                        TextButton(onClick = viewModel::clearError) { Text("OK") }
-                    }
+                    action = { TextButton(onClick = viewModel::clearError) { Text("OK") } }
                 ) { Text(error) }
             }
         }
@@ -149,40 +122,27 @@ fun AiChatScreen(
 @Composable
 fun ChatBubble(message: ChatMessage) {
     val isUser = message.role == "user"
-    val clipboardManager = LocalClipboardManager.current
-
+    val clipboard = LocalClipboardManager.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
     ) {
         if (!isUser) {
             Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.primary),
+                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
-            ) {
-                Text("AI", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            }
+            ) { Text("AI", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
             Spacer(Modifier.width(8.dp))
         }
-
         Column(modifier = Modifier.widthIn(max = 300.dp)) {
             Box(
                 modifier = Modifier
-                    .clip(
-                        RoundedCornerShape(
-                            topStart = if (isUser) 16.dp else 4.dp,
-                            topEnd   = if (isUser) 4.dp else 16.dp,
-                            bottomStart = 16.dp,
-                            bottomEnd   = 16.dp
-                        )
-                    )
-                    .background(
-                        if (isUser) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceVariant
-                    )
+                    .clip(RoundedCornerShape(
+                        topStart = if (isUser) 16.dp else 4.dp,
+                        topEnd   = if (isUser) 4.dp else 16.dp,
+                        bottomStart = 16.dp, bottomEnd = 16.dp
+                    ))
+                    .background(if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                     .padding(12.dp)
             ) {
                 SelectionContainer {
@@ -191,87 +151,43 @@ fun ChatBubble(message: ChatMessage) {
                     } else {
                         Text(
                             text = message.content,
-                            color = if (isUser) MaterialTheme.colorScheme.onPrimary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 14.sp
                         )
                     }
                 }
             }
-
             if (!isUser) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "~${message.tokenCount} tokens",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.padding(start = 4.dp, top = 2.dp)
-                    )
+                    Text("~${message.tokenCount} tokens", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
                     Spacer(Modifier.width(4.dp))
-                    IconButton(
-                        onClick = {
-                            clipboardManager.setText(AnnotatedString(message.content))
-                        },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ContentCopy, "Copy",
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.outline
-                        )
+                    IconButton(onClick = { clipboard.setText(AnnotatedString(message.content)) }, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.ContentCopy, "Copy", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.outline)
                     }
                 }
             }
         }
-
         if (isUser) Spacer(Modifier.width(40.dp))
     }
 }
 
 @Composable
 fun CodeAwareText(content: String) {
-    val clipboardManager = LocalClipboardManager.current
+    val clipboard = LocalClipboardManager.current
     val parts = content.split("```")
     Column {
         parts.forEachIndexed { index, part ->
             if (index % 2 == 0) {
-                if (part.isNotBlank()) {
-                    Text(
-                        text = part.trim(),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 14.sp
-                    )
-                }
+                if (part.isNotBlank()) Text(part.trim(), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
             } else {
                 val lines = part.lines()
-                val code = if (lines.firstOrNull()?.all { it.isLetter() } == true) {
-                    lines.drop(1).joinToString("\n")
-                } else {
-                    part
-                }
+                val code = if (lines.firstOrNull()?.all { it.isLetter() } == true) lines.drop(1).joinToString("\n") else part
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(8.dp)
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surface).padding(8.dp)
                 ) {
-                    Text(
-                        text = code.trim(),
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    IconButton(
-                        onClick = {
-                            clipboardManager.setText(AnnotatedString(code.trim()))
-                        },
-                        modifier = Modifier.align(Alignment.TopEnd).size(28.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ContentCopy, "Copy code",
-                            modifier = Modifier.size(16.dp)
-                        )
+                    Text(code.trim(), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+                    IconButton(onClick = { clipboard.setText(AnnotatedString(code.trim())) }, modifier = Modifier.align(Alignment.TopEnd).size(28.dp)) {
+                        Icon(Icons.Default.ContentCopy, "Copy code", modifier = Modifier.size(16.dp))
                     }
                 }
             }
@@ -281,26 +197,13 @@ fun CodeAwareText(content: String) {
 
 @Composable
 fun TypingIndicator() {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Start,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.primary),
-            contentAlignment = Alignment.Center
-        ) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
             Text("AI", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.width(8.dp))
         Card(shape = RoundedCornerShape(16.dp)) {
-            Row(
-                modifier = Modifier.padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
                 Text("Thinking...", style = MaterialTheme.typography.bodySmall)
@@ -311,109 +214,46 @@ fun TypingIndicator() {
 
 @Composable
 fun ChatEmptyState(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            Icons.Default.AutoAwesome, null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
+    Column(modifier = modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(16.dp))
-        Text(
-            "CodeMaster AI",
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.titleLarge
-        )
+        Text("CodeMaster AI", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp))
-        Text(
-            "Ask me anything about your code." + "\n" + "Attach files for context.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium
-        )
+        Text("Ask me anything about your code." + "\n" + "Attach files for context.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
 @Composable
 fun ChatInputBar(
-    text: String,
-    attachedFileName: String?,
-    isLoading: Boolean,
-    onTextChange: (String) -> Unit,
-    onAttach: () -> Unit,
-    onClearAttachment: () -> Unit,
-    onSend: () -> Unit
+    text: String, attachedFileName: String?, isLoading: Boolean,
+    onTextChange: (String) -> Unit, onAttach: () -> Unit, onClearAttachment: () -> Unit, onSend: () -> Unit
 ) {
     Surface(tonalElevation = 4.dp, shadowElevation = 8.dp) {
-        Column(modifier = Modifier.navigationBarsPadding()) {
+        Column {
             AnimatedVisibility(visible = attachedFileName != null) {
                 attachedFileName?.let { name ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.secondaryContainer)
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.AttachFile, null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
+                    Row(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.secondaryContainer).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
                         Spacer(Modifier.width(8.dp))
-                        Text(
-                            name,
-                            style = MaterialTheme.typography.labelMedium,
-                            modifier = Modifier.weight(1f),
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                        IconButton(
-                            onClick = onClearAttachment,
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(Icons.Default.Close, "Remove", modifier = Modifier.size(16.dp))
-                        }
+                        Text(name, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSecondaryContainer)
+                        IconButton(onClick = onClearAttachment, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.Close, "Remove", modifier = Modifier.size(16.dp)) }
                     }
                 }
             }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.Bottom
-            ) {
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.Bottom) {
                 IconButton(onClick = onAttach, enabled = !isLoading) {
-                    Icon(
-                        Icons.Default.AttachFile, "Attach file",
-                        tint = if (attachedFileName != null) MaterialTheme.colorScheme.primary
-                               else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Icon(Icons.Default.AttachFile, "Attach", tint = if (attachedFileName != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 OutlinedTextField(
-                    value = text,
-                    onValueChange = onTextChange,
+                    value = text, onValueChange = onTextChange,
                     modifier = Modifier.weight(1f),
                     placeholder = { Text("Ask AI anything...") },
-                    maxLines = 5,
-                    shape = RoundedCornerShape(24.dp)
+                    maxLines = 5, shape = RoundedCornerShape(24.dp)
                 )
                 Spacer(Modifier.width(8.dp))
-                FilledIconButton(
-                    onClick = onSend,
-                    enabled = (text.isNotBlank() || attachedFileName != null) && !isLoading,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Icon(Icons.Default.Send, "Send")
-                    }
+                FilledIconButton(onClick = onSend, enabled = (text.isNotBlank() || attachedFileName != null) && !isLoading, modifier = Modifier.size(48.dp)) {
+                    if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                    else Icon(Icons.Default.Send, "Send")
                 }
             }
         }

@@ -11,6 +11,7 @@ import com.codemaster.aistudio.data.api.GroqApiService
 import com.codemaster.aistudio.data.dao.ChatMessageDao
 import com.codemaster.aistudio.data.dao.CodeFileDao
 import com.codemaster.aistudio.data.dao.ProjectDao
+import com.codemaster.aistudio.data.dao.SnippetDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -39,6 +40,7 @@ object AppModule {
     @Provides @Singleton fun provideProjectDao(db: CodeMasterDatabase): ProjectDao = db.projectDao()
     @Provides @Singleton fun provideChatMessageDao(db: CodeMasterDatabase): ChatMessageDao = db.chatMessageDao()
     @Provides @Singleton fun provideCodeFileDao(db: CodeMasterDatabase): CodeFileDao = db.codeFileDao()
+    @Provides @Singleton fun provideSnippetDao(db: CodeMasterDatabase): SnippetDao = db.snippetDao()
 
     @Provides @Singleton
     fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> = context.dataStore

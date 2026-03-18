@@ -44,17 +44,22 @@ class TerminalViewModel @Inject constructor(
     private var readerJob: Job? = null
     private val maxLines = 2000
 
-    private val shellPath: String by lazy {
-        listOf(
-            "/data/data/com.termux/files/usr/bin/bash",
-            "/data/data/com.termux/files/usr/bin/sh",
-            "/system/bin/sh",
-            "/system/xbin/sh"
-        ).firstOrNull { File(it).exists() } ?: "/system/bin/sh"
-    }
-
     private val isTermuxAvailable: Boolean
         get() = File("/data/data/com.termux/files/usr/bin/bash").exists()
+
+    // Build the best available shell command - NO --login on system sh
+    private fun buildShellCommand(): List<String> {
+        return when {
+            File("/data/data/com.termux/files/usr/bin/bash").exists() ->
+                listOf("/data/data/com.termux/files/usr/bin/bash", "--login")
+            File("/data/data/com.termux/files/usr/bin/sh").exists() ->
+                listOf("/data/data/com.termux/files/usr/bin/sh")
+            File("/system/bin/sh").exists() ->
+                listOf("/system/bin/sh")   // NO --login, Android sh doesn't support it
+            else ->
+                listOf("/system/xbin/sh")
+        }
+    }
 
     fun init(projectId: Long) {
         val homeDir = if (isTermuxAvailable)
@@ -62,21 +67,23 @@ class TerminalViewModel @Inject constructor(
         else
             context.filesDir.absolutePath
 
+        val shellCmd = buildShellCommand()
         appendLine(TerminalLine("=== CodeMaster AI Studio Terminal ===", LineType.SYSTEM))
-        appendLine(TerminalLine("Shell: $shellPath", LineType.SYSTEM))
+        appendLine(TerminalLine("Shell: " + shellCmd.first(), LineType.SYSTEM))
         appendLine(TerminalLine(
-            if (isTermuxAvailable) "Termux detected" else "Android system shell",
+            if (isTermuxAvailable) "Termux detected - full shell available"
+            else "Android system shell - built-in commands available",
             LineType.SYSTEM
         ))
         appendLine(TerminalLine("Type 'help' for commands", LineType.SYSTEM))
         appendLine(TerminalLine("", LineType.SYSTEM))
-        startShell(homeDir)
+        startShell(homeDir, shellCmd)
     }
 
-    private fun startShell(startDir: String) {
+    private fun startShell(startDir: String, shellCmd: List<String>) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val pb = ProcessBuilder(shellPath, "--login").apply {
+                val pb = ProcessBuilder(shellCmd).apply {
                     directory(File(startDir).takeIf { it.exists() } ?: context.filesDir)
                     environment().apply {
                         if (isTermuxAvailable) {
@@ -97,9 +104,12 @@ class TerminalViewModel @Inject constructor(
 
                 process = pb.start()
                 writer = OutputStreamWriter(process!!.outputStream, Charsets.UTF_8)
-                _uiState.value = _uiState.value.copy(isRunning = true, shell = shellPath, cwd = startDir)
+                _uiState.value = _uiState.value.copy(
+                    isRunning = true,
+                    shell = shellCmd.first(),
+                    cwd = startDir
+                )
 
-                // Read stdout in a separate coroutine
                 readerJob = viewModelScope.launch(Dispatchers.IO) {
                     launch {
                         try {
@@ -121,9 +131,9 @@ class TerminalViewModel @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-                appendLine(TerminalLine("Failed to start shell: ${e.message}", LineType.ERROR))
-                appendLine(TerminalLine("Using built-in command handler", LineType.SYSTEM))
-                _uiState.value = _uiState.value.copy(isRunning = false)
+                appendLine(TerminalLine("Shell failed: " + e.message, LineType.ERROR))
+                appendLine(TerminalLine("Using built-in commands only", LineType.SYSTEM))
+                _uiState.value = _uiState.value.copy(isRunning = false, cwd = context.filesDir.absolutePath)
             }
         }
     }
@@ -136,21 +146,15 @@ class TerminalViewModel @Inject constructor(
         appendLine(TerminalLine("$ $cmd", LineType.INPUT))
         val newHistory = (_uiState.value.history + cmd).takeLast(100)
         _uiState.value = _uiState.value.copy(input = "", history = newHistory, historyIndex = -1)
-
         when (cmd) {
             "clear", "cls" -> { _uiState.value = _uiState.value.copy(lines = emptyList()); return }
             "help"         -> { showHelp(); return }
             "exit"         -> { appendLine(TerminalLine("Use back button to exit", LineType.SYSTEM)); return }
         }
-
         if (_uiState.value.isRunning && writer != null) {
             viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    writer?.write(cmd + "\n")
-                    writer?.flush()
-                } catch (e: Exception) {
-                    appendLine(TerminalLine("Write error: ${e.message}", LineType.ERROR))
-                }
+                try { writer?.write(cmd + "\n"); writer?.flush() }
+                catch (e: Exception) { appendLine(TerminalLine("Write error: " + e.message, LineType.ERROR)) }
             }
         } else {
             runBuiltinCommand(cmd)
@@ -166,9 +170,8 @@ class TerminalViewModel @Inject constructor(
 
     fun historyDown() {
         val i = _uiState.value.historyIndex - 1
-        if (i < 0) {
-            _uiState.value = _uiState.value.copy(input = "", historyIndex = -1)
-        } else {
+        if (i < 0) _uiState.value = _uiState.value.copy(input = "", historyIndex = -1)
+        else {
             val h = _uiState.value.history
             _uiState.value = _uiState.value.copy(input = h[h.size - 1 - i], historyIndex = i)
         }
@@ -226,19 +229,12 @@ class TerminalViewModel @Inject constructor(
                         }
                         val dir = File(target)
                         if (dir.exists() && dir.isDirectory) {
-                            _uiState.value = _uiState.value.copy(cwd = dir.canonicalPath)
-                            ""
+                            _uiState.value = _uiState.value.copy(cwd = dir.canonicalPath); ""
                         } else "cd: " + target + ": No such directory"
                     }
-                    "mkdir" -> {
-                        if (parts.size < 2) "Usage: mkdir <dir>"
-                        else { File(_uiState.value.cwd, parts[1]).mkdirs(); "" }
-                    }
-                    "rm" -> {
-                        if (parts.size < 2) "Usage: rm <file>"
-                        else { File(_uiState.value.cwd, parts[1]).delete(); "" }
-                    }
-                    "env" -> System.getenv().entries.joinToString("\n") { it.key + "=" + it.value }
+                    "mkdir" -> { if (parts.size < 2) "Usage: mkdir <dir>" else { File(_uiState.value.cwd, parts[1]).mkdirs(); "" } }
+                    "rm"    -> { if (parts.size < 2) "Usage: rm <file>"  else { File(_uiState.value.cwd, parts[1]).delete();  "" } }
+                    "env"   -> System.getenv().entries.joinToString("\n") { it.key + "=" + it.value }
                     else -> {
                         val proc = Runtime.getRuntime().exec(cmd)
                         val out = proc.inputStream.bufferedReader().readText()
@@ -248,9 +244,7 @@ class TerminalViewModel @Inject constructor(
                         out.trim()
                     }
                 }
-                if (result.isNotBlank()) {
-                    result.lines().forEach { appendLine(TerminalLine(it, LineType.OUTPUT)) }
-                }
+                if (result.isNotBlank()) result.lines().forEach { appendLine(TerminalLine(it, LineType.OUTPUT)) }
             } catch (e: Exception) {
                 appendLine(TerminalLine(e.message ?: "command failed", LineType.ERROR))
             }
@@ -258,9 +252,10 @@ class TerminalViewModel @Inject constructor(
     }
 
     private fun showHelp() {
-        appendLine(TerminalLine("Built-in: clear cd ls cat mkdir rm pwd echo env uname whoami date", LineType.SYSTEM))
+        appendLine(TerminalLine("clear  cd  ls  cat  mkdir  rm  pwd  echo  env  uname  whoami  date", LineType.SYSTEM))
         appendLine(TerminalLine(
-            if (isTermuxAvailable) "Termux shell active" else "Install Termux for full shell",
+            if (isTermuxAvailable) "Termux shell active - use pkg, git, python, node etc."
+            else "Install Termux app for full shell access",
             LineType.SYSTEM
         ))
     }

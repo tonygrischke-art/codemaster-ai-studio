@@ -21,26 +21,23 @@ class SettingsRepository @Inject constructor(
         val GITHUB_OWNER  = stringPreferencesKey("github_owner")
         val GITHUB_REPO   = stringPreferencesKey("github_repo")
         val GITHUB_BRANCH = stringPreferencesKey("github_branch")
+        val AI_PERSONA    = stringPreferencesKey("ai_persona")
     }
 
-    suspend fun getApiKey(): String       = dataStore.data.first()[API_KEY] ?: ""
-    suspend fun saveApiKey(k: String)     { dataStore.edit { it[API_KEY] = k } }
-
-    suspend fun getModel(): String        = dataStore.data.first()[MODEL] ?: "llama-3.3-70b-versatile"
-    suspend fun saveModel(m: String)      { dataStore.edit { it[MODEL] = m } }
-
-    suspend fun getDarkTheme(): Boolean   = dataStore.data.first()[DARK_THEME] ?: true
-    suspend fun saveDarkTheme(d: Boolean) { dataStore.edit { it[DARK_THEME] = d } }
-
-    suspend fun getGitHubToken(): String  = dataStore.data.first()[GITHUB_TOKEN] ?: ""
-    suspend fun saveGitHubToken(t: String){ dataStore.edit { it[GITHUB_TOKEN] = t } }
-
-    suspend fun getGitHubOwner(): String  = dataStore.data.first()[GITHUB_OWNER] ?: ""
-    suspend fun saveGitHubOwner(o: String){ dataStore.edit { it[GITHUB_OWNER] = o } }
-
-    suspend fun getGitHubRepo(): String   = dataStore.data.first()[GITHUB_REPO] ?: ""
-    suspend fun saveGitHubRepo(r: String) { dataStore.edit { it[GITHUB_REPO] = r } }
-
-    suspend fun getGitHubBranch(): String = dataStore.data.first()[GITHUB_BRANCH] ?: "main"
+    suspend fun getApiKey(): String        = dataStore.data.first()[API_KEY] ?: ""
+    suspend fun saveApiKey(k: String)      { dataStore.edit { it[API_KEY] = k } }
+    suspend fun getModel(): String         = dataStore.data.first()[MODEL] ?: "llama-3.3-70b-versatile"
+    suspend fun saveModel(m: String)       { dataStore.edit { it[MODEL] = m } }
+    suspend fun getDarkTheme(): Boolean    = dataStore.data.first()[DARK_THEME] ?: true
+    suspend fun saveDarkTheme(d: Boolean)  { dataStore.edit { it[DARK_THEME] = d } }
+    suspend fun getGitHubToken(): String   = dataStore.data.first()[GITHUB_TOKEN] ?: ""
+    suspend fun saveGitHubToken(t: String) { dataStore.edit { it[GITHUB_TOKEN] = t } }
+    suspend fun getGitHubOwner(): String   = dataStore.data.first()[GITHUB_OWNER] ?: ""
+    suspend fun saveGitHubOwner(o: String) { dataStore.edit { it[GITHUB_OWNER] = o } }
+    suspend fun getGitHubRepo(): String    = dataStore.data.first()[GITHUB_REPO] ?: ""
+    suspend fun saveGitHubRepo(r: String)  { dataStore.edit { it[GITHUB_REPO] = r } }
+    suspend fun getGitHubBranch(): String  = dataStore.data.first()[GITHUB_BRANCH] ?: "main"
     suspend fun saveGitHubBranch(b: String){ dataStore.edit { it[GITHUB_BRANCH] = b } }
+    suspend fun getPersonaId(): String     = dataStore.data.first()[AI_PERSONA] ?: "codemaster"
+    suspend fun savePersonaId(id: String)  { dataStore.edit { it[AI_PERSONA] = id } }
 }
