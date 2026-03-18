@@ -16,9 +16,11 @@ data class HomeUiState(
     val projects: List<Project> = emptyList(),
     val isLoading: Boolean = false,
     val showNewProjectDialog: Boolean = false,
+    val showImportDialog: Boolean = false,
     val newProjectName: String = "",
     val newProjectLanguage: String = "Kotlin",
     val newProjectDescription: String = "",
+    val importPath: String = "",
     val error: String? = null
 )
 
@@ -30,32 +32,28 @@ class HomeViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(HomeUiState(isLoading = true))
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    init {
-        loadProjects()
-    }
+    init { loadProjects() }
 
     private fun loadProjects() {
         viewModelScope.launch {
             projectRepository.getAllProjects()
                 .catch { e -> _uiState.value = _uiState.value.copy(error = e.message, isLoading = false) }
-                .collect { projects ->
-                    _uiState.value = _uiState.value.copy(projects = projects, isLoading = false)
-                }
+                .collect { projects -> _uiState.value = _uiState.value.copy(projects = projects, isLoading = false) }
         }
     }
 
-    fun showNewProjectDialog() { _uiState.value = _uiState.value.copy(showNewProjectDialog = true) }
-    fun hideNewProjectDialog() { _uiState.value = _uiState.value.copy(showNewProjectDialog = false, newProjectName = "", newProjectLanguage = "Kotlin", newProjectDescription = "") }
-    fun updateProjectName(name: String) { _uiState.value = _uiState.value.copy(newProjectName = name) }
-    fun updateProjectLanguage(lang: String) { _uiState.value = _uiState.value.copy(newProjectLanguage = lang) }
-    fun updateProjectDescription(desc: String) { _uiState.value = _uiState.value.copy(newProjectDescription = desc) }
+    fun showNewProjectDialog()  { _uiState.value = _uiState.value.copy(showNewProjectDialog = true) }
+    fun hideNewProjectDialog()  { _uiState.value = _uiState.value.copy(showNewProjectDialog = false, newProjectName = "", newProjectLanguage = "Kotlin", newProjectDescription = "") }
+    fun showImportDialog()      { _uiState.value = _uiState.value.copy(showImportDialog = true, importPath = "/data/data/com.termux/files/home/") }
+    fun hideImportDialog()      { _uiState.value = _uiState.value.copy(showImportDialog = false, importPath = "") }
+    fun updateProjectName(v: String)        { _uiState.value = _uiState.value.copy(newProjectName = v) }
+    fun updateProjectLanguage(v: String)    { _uiState.value = _uiState.value.copy(newProjectLanguage = v) }
+    fun updateProjectDescription(v: String) { _uiState.value = _uiState.value.copy(newProjectDescription = v) }
+    fun updateImportPath(v: String)         { _uiState.value = _uiState.value.copy(importPath = v) }
 
     fun createProject(onCreated: (Long) -> Unit) {
         val state = _uiState.value
-        if (state.newProjectName.isBlank()) {
-            _uiState.value = state.copy(error = "Project name cannot be empty")
-            return
-        }
+        if (state.newProjectName.isBlank()) { _uiState.value = state.copy(error = "Project name cannot be empty"); return }
         viewModelScope.launch {
             val id = projectRepository.createProject(
                 name = state.newProjectName.trim(),
@@ -67,9 +65,36 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun deleteProject(project: Project) {
-        viewModelScope.launch { projectRepository.deleteProject(project) }
+    fun importProject(onImported: (Long) -> Unit) {
+        val state = _uiState.value
+        val path = state.importPath.trim()
+        if (path.isBlank()) { _uiState.value = state.copy(error = "Enter a folder path"); return }
+
+        val folderName = path.trimEnd('/').substringAfterLast('/')
+        val displayName = if (folderName.isNotBlank()) folderName else "Imported Project"
+
+        val language = try {
+            val dir = java.io.File(path)
+            when {
+                dir.listFiles()?.any { it.name.endsWith(".kt") } == true   -> "Kotlin"
+                dir.listFiles()?.any { it.name.endsWith(".java") } == true -> "Java"
+                dir.listFiles()?.any { it.name.endsWith(".py") } == true   -> "Python"
+                dir.listFiles()?.any { it.name.endsWith(".js") } == true   -> "JavaScript"
+                else -> "Kotlin"
+            }
+        } catch (_: Exception) { "Kotlin" }
+
+        viewModelScope.launch {
+            val id = projectRepository.createProject(
+                name = displayName,
+                language = language,
+                description = "Loaded from: $path"
+            )
+            hideImportDialog()
+            onImported(id)
+        }
     }
 
+    fun deleteProject(project: Project) { viewModelScope.launch { projectRepository.deleteProject(project) } }
     fun clearError() { _uiState.value = _uiState.value.copy(error = null) }
 }
