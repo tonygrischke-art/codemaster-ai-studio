@@ -12,6 +12,7 @@ import com.codemaster.aistudio.data.dao.ChatMessageDao
 import com.codemaster.aistudio.data.dao.CodeFileDao
 import com.codemaster.aistudio.data.dao.ProjectDao
 import com.codemaster.aistudio.data.dao.SnippetDao
+import com.codemaster.aistudio.data.repository.FileSystemRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -34,8 +35,7 @@ object AppModule {
     @Provides @Singleton
     fun provideDatabase(@ApplicationContext context: Context): CodeMasterDatabase =
         Room.databaseBuilder(context, CodeMasterDatabase::class.java, "codemaster_db")
-            .fallbackToDestructiveMigration()
-            .build()
+            .fallbackToDestructiveMigration().build()
 
     @Provides @Singleton fun provideProjectDao(db: CodeMasterDatabase): ProjectDao = db.projectDao()
     @Provides @Singleton fun provideChatMessageDao(db: CodeMasterDatabase): ChatMessageDao = db.chatMessageDao()
@@ -46,25 +46,23 @@ object AppModule {
     fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> = context.dataStore
 
     @Provides @Singleton
+    fun provideFileSystemRepository(@ApplicationContext context: Context): FileSystemRepository =
+        FileSystemRepository(context)
+
+    @Provides @Singleton
     fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
         .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC })
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
+        .connectTimeout(30, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
 
     @Provides @Singleton @Named("groq")
     fun provideGroqRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
-        .baseUrl("https://api.groq.com/")
-        .client(client)
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
+        .baseUrl("https://api.groq.com/").client(client)
+        .addConverterFactory(GsonConverterFactory.create()).build()
 
     @Provides @Singleton @Named("github")
     fun provideGitHubRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
-        .baseUrl("https://api.github.com/")
-        .client(client)
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
+        .baseUrl("https://api.github.com/").client(client)
+        .addConverterFactory(GsonConverterFactory.create()).build()
 
     @Provides @Singleton
     fun provideGroqApiService(@Named("groq") retrofit: Retrofit): GroqApiService =

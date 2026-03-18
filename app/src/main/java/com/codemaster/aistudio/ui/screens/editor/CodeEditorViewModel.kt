@@ -2,68 +2,123 @@ package com.codemaster.aistudio.ui.screens.editor
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.codemaster.aistudio.data.dao.CodeFileDao
-import com.codemaster.aistudio.data.model.CodeFile
+import com.codemaster.aistudio.data.repository.DiskFile
+import com.codemaster.aistudio.data.repository.FileSystemRepository
 import com.codemaster.aistudio.data.repository.ProjectRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class EditorUiState(
-    val files: List<CodeFile> = emptyList(),
-    val currentFile: CodeFile? = null,
+    val projectName: String = "",
+    val rootPath: String = "",
+    val files: List<DiskFile> = emptyList(),
+    val expandedDirs: Set<String> = emptySet(),
+    val currentFile: DiskFile? = null,
     val content: String = "",
+    val language: String = "plaintext",
     val isDirty: Boolean = false,
     val isSaving: Boolean = false,
-    val showFileTree: Boolean = true,
+    val isLoadingFiles: Boolean = false,
     val showNewFileDialog: Boolean = false,
     val newFileName: String = "",
+    val newFileDir: String = "",
+    val showFileTree: Boolean = true,
     val cursorLine: Int = 1,
     val cursorCol: Int = 1,
-    val error: String? = null,
-    val projectName: String = ""
+    val recentFiles: List<DiskFile> = emptyList(),
+    val searchQuery: String = "",
+    val error: String? = null
 )
 
 @HiltViewModel
 class CodeEditorViewModel @Inject constructor(
-    private val codeFileDao: CodeFileDao,
+    private val fsRepository: FileSystemRepository,
     private val projectRepository: ProjectRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(EditorUiState())
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
 
-    private var currentProjectId: Long = -1L
-
     fun init(projectId: Long, fileId: Long) {
-        currentProjectId = projectId
         viewModelScope.launch {
             val project = projectRepository.getProjectById(projectId)
-            _uiState.value = _uiState.value.copy(projectName = project?.name ?: "Editor")
-            codeFileDao.getFilesForProject(projectId)
-                .catch { }
-                .collect { files ->
-                    _uiState.value = _uiState.value.copy(files = files)
-                    if (_uiState.value.currentFile == null && files.isNotEmpty()) {
-                        val target = if (fileId != -1L) files.find { it.id == fileId } else files.first()
-                        target?.let { openFile(it) }
-                    }
-                }
+            val name = project?.name ?: "Editor"
+            val desc = project?.description ?: ""
+
+            // Extract path from description if it was an imported project
+            val rootPath = when {
+                desc.startsWith("Loaded from: ") -> desc.removePrefix("Loaded from: ")
+                desc.startsWith("Imported from: ") -> desc.removePrefix("Imported from: ")
+                else -> ""
+            }
+
+            _uiState.value = _uiState.value.copy(
+                projectName = name,
+                rootPath = rootPath,
+                newFileDir = rootPath
+            )
+
+            if (rootPath.isNotBlank()) {
+                scanFiles(rootPath)
+            }
         }
     }
 
-    fun openFile(file: CodeFile) {
-        _uiState.value = _uiState.value.copy(
-            currentFile = file,
-            content = file.content,
-            isDirty = false,
-            cursorLine = 1,
-            cursorCol = 1
-        )
+    fun scanFiles(path: String = _uiState.value.rootPath) {
+        if (path.isBlank()) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingFiles = true)
+            fsRepository.scanDirectory(path).fold(
+                onSuccess = { files ->
+                    _uiState.value = _uiState.value.copy(
+                        files = files,
+                        rootPath = path,
+                        newFileDir = path,
+                        isLoadingFiles = false,
+                        // Auto-expand root
+                        expandedDirs = setOf(path)
+                    )
+                },
+                onFailure = { e ->
+                    _uiState.value = _uiState.value.copy(isLoadingFiles = false, error = e.message)
+                }
+            )
+        }
+    }
+
+    fun toggleDir(dirPath: String) {
+        val expanded = _uiState.value.expandedDirs.toMutableSet()
+        if (dirPath in expanded) expanded.remove(dirPath) else expanded.add(dirPath)
+        _uiState.value = _uiState.value.copy(expandedDirs = expanded)
+    }
+
+    fun openFile(file: DiskFile) {
+        if (file.isDirectory) { toggleDir(file.path); return }
+        // Save current file first
+        if (_uiState.value.isDirty) saveCurrentFile()
+
+        viewModelScope.launch {
+            fsRepository.readFile(file.path).fold(
+                onSuccess = { content ->
+                    val lang = fsRepository.getLanguageFromExtension(file.extension)
+                    val recent = (_uiState.value.recentFiles.filter { it.path != file.path } + file).takeLast(10)
+                    _uiState.value = _uiState.value.copy(
+                        currentFile = file,
+                        content = content,
+                        language = lang,
+                        isDirty = false,
+                        recentFiles = recent
+                    )
+                },
+                onFailure = { e ->
+                    _uiState.value = _uiState.value.copy(error = e.message)
+                }
+            )
+        }
     }
 
     fun updateContent(content: String) {
@@ -79,45 +134,78 @@ class CodeEditorViewModel @Inject constructor(
         val file = state.currentFile ?: return
         viewModelScope.launch {
             _uiState.value = state.copy(isSaving = true)
-            codeFileDao.updateFile(
-                file.copy(content = state.content, lastModified = System.currentTimeMillis())
+            fsRepository.writeFile(file.path, state.content).fold(
+                onSuccess = { _uiState.value = _uiState.value.copy(isSaving = false, isDirty = false) },
+                onFailure = { e -> _uiState.value = _uiState.value.copy(isSaving = false, error = e.message) }
             )
-            _uiState.value = _uiState.value.copy(isSaving = false, isDirty = false)
+        }
+    }
+
+    fun showNewFileDialog(dirPath: String = _uiState.value.rootPath) {
+        _uiState.value = _uiState.value.copy(showNewFileDialog = true, newFileName = "", newFileDir = dirPath)
+    }
+
+    fun hideNewFileDialog() { _uiState.value = _uiState.value.copy(showNewFileDialog = false) }
+    fun updateNewFileName(v: String) { _uiState.value = _uiState.value.copy(newFileName = v) }
+
+    fun createFile() {
+        val state = _uiState.value
+        val name = state.newFileName.trim()
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            fsRepository.createFile(state.newFileDir, name).fold(
+                onSuccess = { path ->
+                    hideNewFileDialog()
+                    scanFiles()
+                    // Open the new file
+                    val newFile = DiskFile(
+                        name = name, path = path,
+                        relativePath = name,
+                        size = 0, lastModified = System.currentTimeMillis(),
+                        isDirectory = false,
+                        extension = name.substringAfterLast('.', "")
+                    )
+                    openFile(newFile)
+                },
+                onFailure = { e -> _uiState.value = _uiState.value.copy(error = e.message) }
+            )
+        }
+    }
+
+    fun deleteFile(file: DiskFile) {
+        viewModelScope.launch {
+            fsRepository.deleteFile(file.path)
+            if (_uiState.value.currentFile?.path == file.path) {
+                _uiState.value = _uiState.value.copy(currentFile = null, content = "")
+            }
+            scanFiles()
         }
     }
 
     fun toggleFileTree() { _uiState.value = _uiState.value.copy(showFileTree = !_uiState.value.showFileTree) }
-    fun showNewFileDialog() { _uiState.value = _uiState.value.copy(showNewFileDialog = true) }
-    fun hideNewFileDialog() { _uiState.value = _uiState.value.copy(showNewFileDialog = false, newFileName = "") }
-    fun updateNewFileName(name: String) { _uiState.value = _uiState.value.copy(newFileName = name) }
-
-    fun createFile() {
-        val name = _uiState.value.newFileName.trim()
-        if (name.isBlank()) return
-        viewModelScope.launch {
-            val language = when (name.substringAfterLast('.').lowercase()) {
-                "kt","kts" -> "kotlin"; "java" -> "java"; "py" -> "python"
-                "js","jsx","ts","tsx" -> "javascript"; "xml" -> "xml"
-                "json" -> "json"; "md" -> "markdown"; "sh" -> "shell"
-                "html" -> "html"; "css","scss" -> "css"; "rs" -> "rust"
-                "go" -> "go"; "dart" -> "dart"; else -> "text"
-            }
-            val id = codeFileDao.insertFile(
-                CodeFile(projectId = currentProjectId, name = name, path = name, language = language)
-            )
-            hideNewFileDialog()
-            codeFileDao.getFileById(id)?.let { openFile(it) }
-        }
-    }
-
-    fun deleteFile(file: CodeFile) {
-        viewModelScope.launch {
-            codeFileDao.deleteFile(file)
-            if (_uiState.value.currentFile?.id == file.id) {
-                _uiState.value = _uiState.value.copy(currentFile = null, content = "")
-            }
-        }
-    }
-
+    fun updateSearch(q: String) { _uiState.value = _uiState.value.copy(searchQuery = q) }
     fun clearError() { _uiState.value = _uiState.value.copy(error = null) }
+
+    fun getVisibleFiles(): List<DiskFile> {
+        val state = _uiState.value
+        val query = state.searchQuery.trim()
+        val root = state.rootPath
+
+        return if (query.isNotBlank()) {
+            // Search mode - show all matching files flat
+            state.files.filter {
+                !it.isDirectory && (
+                    it.name.contains(query, ignoreCase = true) ||
+                    it.relativePath.contains(query, ignoreCase = true)
+                )
+            }
+        } else {
+            // Tree mode - only show files whose parent dirs are expanded
+            state.files.filter { file ->
+                val parentPath = file.path.substringBeforeLast('/')
+                parentPath == root || parentPath in state.expandedDirs ||
+                    state.expandedDirs.any { file.path.startsWith(it + "/") && file.depth == 1 }
+            }
+        }
+    }
 }
