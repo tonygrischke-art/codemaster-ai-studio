@@ -143,7 +143,7 @@ fun SettingsScreen(
                     value = uiState.githubRepo,
                     onValueChange = { viewModel.updateGithubRepo(it) },
                     label = { Text("Repository Name") },
-                    placeholder = { Text("codemaster-ai-studio") },
+                    placeholder = { Text("e.g. /data/data/com.termux/files/home/myproject") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     leadingIcon = { Icon(Icons.Default.FolderOpen, null) }

@@ -145,7 +145,7 @@ fun ImportProjectDialog(path: String, onPathChange: (String) -> Unit, onImport: 
                 )
                 Text("Quick paths:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 listOf(
-                    "codemaster-ai-studio" to "/data/data/com.termux/files/home/codemaster-ai-studio",
+                    "codemaster-ai-studio" to (android.os.Environment.getExternalStorageDirectory().absolutePath + "/codemaster-ai-studio"),
                     "Termux home"          to "/data/data/com.termux/files/home",
                     "App storage"          to "/data/data/com.codemaster.aistudio/files"
                 ).forEach { (label, quickPath) ->

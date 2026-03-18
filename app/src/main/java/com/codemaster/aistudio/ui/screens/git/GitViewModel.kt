@@ -36,7 +36,7 @@ class GitViewModel @Inject constructor(
     fun init(projectId: Long) {
         // Find repo - check Termux home first, then app files dir
         val paths = listOf(
-            "/data/data/com.termux/files/home/codemaster-ai-studio",
+            android.os.Environment.getExternalStorageDirectory().absolutePath + "/codemaster-ai-studio",
             context.filesDir.absolutePath
         )
         val repoPath = paths.firstOrNull { File(it, ".git").exists() } ?: paths.first()
