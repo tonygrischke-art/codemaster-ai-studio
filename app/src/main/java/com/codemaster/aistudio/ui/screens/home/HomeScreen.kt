@@ -1,8 +1,5 @@
 package com.codemaster.aistudio.ui.screens.home
 
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,24 +38,6 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-
-    // Folder browser for loading projects
-    val folderPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocumentTree()
-    ) { uri: Uri? ->
-        uri?.let { treeUri ->
-            val docId = androidx.documentfile.provider.DocumentFile
-                .fromTreeUri(androidx.compose.ui.platform.LocalContext.current as android.content.Context, treeUri)
-                ?.uri?.lastPathSegment ?: ""
-            val path = when {
-                docId.startsWith("primary:") -> "/sdcard/" + docId.removePrefix("primary:")
-                docId.startsWith("home:") -> "/data/data/com.termux/files/home/" + docId.removePrefix("home:")
-                else -> treeUri.path?.replace("/tree/primary:", "/sdcard/") ?: ""
-            }
-            if (path.isNotBlank()) viewModel.updateImportPath(path)
-            viewModel.showImportDialog()
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -102,40 +81,29 @@ fun HomeScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // ── Quick Actions Bar ──────────────────────────────
                     item {
                         QuickActionsBar(
-                            onBrowseFiles = { folderPicker.launch(null) },
-                            onOpenChat = {
-                                // Open chat for first project, or show picker
-                                uiState.projects.firstOrNull()?.let { onOpenChat(it.id) }
-                            }
+                            onBrowseFiles = { viewModel.showImportDialog() },
+                            onOpenChat = { uiState.projects.firstOrNull()?.let { onOpenChat(it.id) } }
                         )
                     }
-
                     item {
-                        Text(
-                            "Projects (${uiState.projects.size})",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text("Projects (${uiState.projects.size})", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-
                     items(uiState.projects, key = { it.id }) { project ->
                         ProjectCard(
                             project = project,
-                            onOpenChat     = { onOpenChat(project.id) },
-                            onOpenEditor   = { onOpenEditor(project.id) },
-                            onOpenBuild    = { onOpenBuild(project.id) },
+                            onOpenChat = { onOpenChat(project.id) },
+                            onOpenEditor = { onOpenEditor(project.id) },
+                            onOpenBuild = { onOpenBuild(project.id) },
                             onOpenTerminal = { onOpenTerminal(project.id) },
-                            onOpenGit      = { onOpenGit(project.id) },
-                            onDelete       = { viewModel.deleteProject(project) }
+                            onOpenGit = { onOpenGit(project.id) },
+                            onDelete = { viewModel.deleteProject(project) }
                         )
                     }
                     item { Spacer(Modifier.height(100.dp)) }
                 }
             }
-
             uiState.error?.let { error ->
                 Snackbar(
                     modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
@@ -160,7 +128,6 @@ fun HomeScreen(
             ImportProjectDialog(
                 path = uiState.importPath,
                 onPathChange = viewModel::updateImportPath,
-                onBrowse = { folderPicker.launch(null) },
                 onImport = { viewModel.importProject { id -> onOpenEditor(id) } },
                 onDismiss = viewModel::hideImportDialog
             )
@@ -168,29 +135,18 @@ fun HomeScreen(
     }
 }
 
-// ── Quick Actions Bar ──────────────────────────────────────────
 @Composable
-fun QuickActionsBar(
-    onBrowseFiles: () -> Unit,
-    onOpenChat: () -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // AI Chat button
+fun QuickActionsBar(onBrowseFiles: () -> Unit, onOpenChat: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Button(
             onClick = onOpenChat,
             modifier = Modifier.weight(1f).height(52.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            shape = RoundedCornerShape(14.dp)
         ) {
             Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text("AI Chat", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text("AI Chat", fontWeight = FontWeight.Bold)
         }
-
-        // Browse Files button
         OutlinedButton(
             onClick = onBrowseFiles,
             modifier = Modifier.weight(1f).height(52.dp),
@@ -198,20 +154,13 @@ fun QuickActionsBar(
         ) {
             Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text("Browse", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text("Browse", fontWeight = FontWeight.Bold)
         }
     }
 }
 
-// ── Import Dialog with Browse button ──────────────────────────
 @Composable
-fun ImportProjectDialog(
-    path: String,
-    onPathChange: (String) -> Unit,
-    onBrowse: () -> Unit,
-    onImport: () -> Unit,
-    onDismiss: () -> Unit
-) {
+fun ImportProjectDialog(path: String, onPathChange: (String) -> Unit, onImport: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -223,34 +172,21 @@ fun ImportProjectDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    "Enter the path or browse to your project folder:",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Text("Enter the full path to your project folder:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedTextField(
                     value = path, onValueChange = onPathChange,
                     label = { Text("Folder path") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2, maxLines = 3,
-                    placeholder = { Text("/sdcard/my-project") },
-                    trailingIcon = {
-                        IconButton(onClick = onBrowse) {
-                            Icon(Icons.Default.FolderOpen, "Browse", tint = MaterialTheme.colorScheme.primary)
-                        }
-                    }
+                    placeholder = { Text("/sdcard/my-project") }
                 )
-                // Quick path chips
                 Text("Quick paths:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 listOf(
                     "codemaster-ai-studio" to (android.os.Environment.getExternalStorageDirectory().absolutePath + "/codemaster-ai-studio"),
-                    "Termux home"          to "/data/data/com.termux/files/home",
-                    "SDCard"               to android.os.Environment.getExternalStorageDirectory().absolutePath
+                    "Termux home" to "/data/data/com.termux/files/home",
+                    "SDCard" to android.os.Environment.getExternalStorageDirectory().absolutePath
                 ).forEach { (label, quickPath) ->
-                    SuggestionChip(
-                        onClick = { onPathChange(quickPath) },
-                        label = { Text(label, style = MaterialTheme.typography.labelSmall) }
-                    )
+                    SuggestionChip(onClick = { onPathChange(quickPath) }, label = { Text(label, style = MaterialTheme.typography.labelSmall) })
                 }
             }
         },
@@ -273,11 +209,7 @@ fun ProjectCard(
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
@@ -288,33 +220,19 @@ fun ProjectCard(
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(project.name, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        "${project.language} • ${dateFormat.format(Date(project.lastModified))}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text("${project.language} - ${dateFormat.format(Date(project.lastModified))}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (project.path.isNotBlank()) {
-                        Text(
-                            "Loaded from: ${project.path}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Text(project.path, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 Box {
                     IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, null) }
                     DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                            onClick = { showMenu = false; onDelete() },
-                            leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
-                        )
+                        DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, onClick = { showMenu = false; onDelete() }, leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) })
                     }
                 }
             }
-            if (project.description.isNotBlank()) {
+            if (project.description.isNotBlank() && !project.description.startsWith("Loaded from:")) {
                 Spacer(Modifier.height(8.dp))
                 Text(project.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
@@ -322,11 +240,11 @@ fun ProjectCard(
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                ProjectActionButton(Icons.Default.AutoAwesome,       "Chat",     onOpenChat)
-                ProjectActionButton(Icons.Default.Code,              "Editor",   onOpenEditor)
-                ProjectActionButton(Icons.Default.Terminal,          "Terminal", onOpenTerminal)
-                ProjectActionButton(Icons.Default.AccountTree,       "Git",      onOpenGit)
-                ProjectActionButton(Icons.Default.Build,             "Build",    onOpenBuild)
+                ProjectActionButton(Icons.Default.AutoAwesome, "Chat", onOpenChat)
+                ProjectActionButton(Icons.Default.Code, "Editor", onOpenEditor)
+                ProjectActionButton(Icons.Default.Terminal, "Terminal", onOpenTerminal)
+                ProjectActionButton(Icons.Default.AccountTree, "Git", onOpenGit)
+                ProjectActionButton(Icons.Default.Build, "Build", onOpenBuild)
             }
         }
     }
@@ -348,7 +266,6 @@ fun EmptyProjectsPlaceholder(modifier: Modifier = Modifier) {
         Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outlineVariant)
         Spacer(Modifier.height(16.dp))
         Text("No projects yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.height(8.dp))
         Text("Tap Browse to load or + to create a project", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

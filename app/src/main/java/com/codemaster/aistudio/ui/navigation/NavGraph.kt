@@ -14,6 +14,7 @@ import com.codemaster.aistudio.ui.screens.home.HomeScreen
 import com.codemaster.aistudio.ui.screens.settings.SettingsScreen
 import com.codemaster.aistudio.ui.screens.snippets.SnippetScreen
 import com.codemaster.aistudio.ui.screens.terminal.TerminalScreen
+import com.codemaster.aistudio.ui.screens.preview.PreviewScreen
 
 sealed class Screen(val route: String) {
     object Home     : Screen("home")
@@ -23,11 +24,12 @@ sealed class Screen(val route: String) {
     object Editor   : Screen("editor/{projectId}/{fileId}") { fun createRoute(pid: Long, fid: Long = -1L) = "editor/$pid/$fid" }
     object Build    : Screen("build/{projectId}")    { fun createRoute(id: Long = -1L) = "build/$id" }
     object Terminal : Screen("terminal/{projectId}") { fun createRoute(id: Long = -1L) = "terminal/$id" }
-    object Git      : Screen("git/{projectId}")      { fun createRoute(id: Long = -1L) = "git/$id" }
+    object Git      : Screen("git/{projectId}")
+    object Preview  : Screen("preview/{projectId}") { fun createRoute(id: Long = -1L) = "preview/$id" }      { fun createRoute(id: Long = -1L) = "git/$id" }
 }
 
 @Composable
-fun NavGraph(navController: NavHostController) {
+fun NavGraph(navController: NavHostController, previewFile: String = "", previewContent: String = "") {
     NavHost(navController = navController, startDestination = Screen.Home.route) {
 
         composable(Screen.Home.route) {

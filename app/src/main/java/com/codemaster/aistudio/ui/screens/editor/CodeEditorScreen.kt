@@ -28,6 +28,7 @@ import com.codemaster.aistudio.ui.screens.settings.SettingsViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CodeEditorScreen(
+    onOpenPreview: ((String, String) -> Unit)? = null,
     projectId: Long,
     fileId: Long,
     onBack: () -> Unit,
@@ -80,6 +81,14 @@ fun CodeEditorScreen(
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") } },
                 actions = {
                     IconButton(onClick = { showSearch = !showSearch }) { Icon(Icons.Default.Search, "Search files") }
+                    IconButton(onClick = {
+                        val file = uiState.currentFile
+                        if (file != null && onOpenPreview != null) {
+                            onOpenPreview(file.name, uiState.content)
+                        }
+                    }) {
+                        Icon(Icons.Default.Preview, "Preview file", tint = MaterialTheme.colorScheme.primary)
+                    }
                     IconButton(onClick = { viewModel.toggleFileTree() }) { Icon(Icons.Default.AccountTree, "Files") }
                     if (uiState.isDirty) {
                         IconButton(onClick = { viewModel.saveCurrentFile() }) {
