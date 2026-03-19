@@ -1,4 +1,24 @@
-package com.codemaster.aistudio.ui.screens.preview
+import re
+
+# 1. Fix NavGraph - show line 41 first
+with open("app/src/main/java/com/codemaster/aistudio/ui/navigation/NavGraph.kt") as f:
+    lines = f.readlines()
+print("NavGraph line 41:", repr(lines[40]))
+
+# Remove any line containing 'createRoute' that also has 'Preview'
+fixed = []
+for line in lines:
+    if 'Preview' in line and 'createRoute' in line:
+        # Keep only the simple Screen object definition
+        fixed.append('    object Preview  : Screen("preview/{projectId}")\n')
+    else:
+        fixed.append(line)
+with open("app/src/main/java/com/codemaster/aistudio/ui/navigation/NavGraph.kt", 'w') as f:
+    f.writelines(fixed)
+print("Fixed NavGraph.kt")
+
+# 2. Delete PreviewScreen and rewrite with correct Kotlin triple-quoted strings
+preview = '''package com.codemaster.aistudio.ui.screens.preview
 
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -99,7 +119,7 @@ fun HtmlPreview(html: String) {
 fun MarkdownPreview(markdown: String) {
     val html = markdownToHtml(markdown)
     val dark = "#1a1a2e"
-    val styledHtml = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><style>body{font-family:sans-serif;padding:16px;line-height:1.6;color:#e0e0e0;background:$dark}h1,h2,h3{color:#bb86fc}code{background:#2d2d2d;padding:2px 6px;border-radius:4px;color:#03dac6}pre{background:#0d1117;padding:16px;border-radius:8px}a{color:#03dac6}</style></head><body>$html</body></html>"
+    val styledHtml = "<html><head><meta name=\\"viewport\\" content=\\"width=device-width, initial-scale=1\\"><style>body{font-family:sans-serif;padding:16px;line-height:1.6;color:#e0e0e0;background:$dark}h1,h2,h3{color:#bb86fc}code{background:#2d2d2d;padding:2px 6px;border-radius:4px;color:#03dac6}pre{background:#0d1117;padding:16px;border-radius:8px}a{color:#03dac6}</style></head><body>$html</body></html>"
     AndroidView(
         factory = { context ->
             WebView(context).apply {
@@ -121,14 +141,14 @@ fun markdownToHtml(md: String): String {
     html = html.replace(Regex("""^### (.+)$""", RegexOption.MULTILINE)) { "<h3>${it.groupValues[1]}</h3>" }
     html = html.replace(Regex("""^## (.+)$""", RegexOption.MULTILINE)) { "<h2>${it.groupValues[1]}</h2>" }
     html = html.replace(Regex("""^# (.+)$""", RegexOption.MULTILINE)) { "<h1>${it.groupValues[1]}</h1>" }
-    html = html.replace(Regex("""```[\w]*\n([\s\S]*?)```""")) { "<pre><code>${it.groupValues[1].trim()}</code></pre>" }
+    html = html.replace(Regex("""```[\\w]*\\n([\\s\\S]*?)```""")) { "<pre><code>${it.groupValues[1].trim()}</code></pre>" }
     html = html.replace(Regex("""`([^`]+)`""")) { "<code>${it.groupValues[1]}</code>" }
-    html = html.replace(Regex("""\*\*(.+?)\*\*""")) { "<strong>${it.groupValues[1]}</strong>" }
-    html = html.replace(Regex("""\*(.+?)\*""")) { "<em>${it.groupValues[1]}</em>" }
-    html = html.replace(Regex("""\[(.+?)\]\((.+?)\)""")) { "<a href='${it.groupValues[2]}'>${it.groupValues[1]}</a>" }
+    html = html.replace(Regex("""\\*\\*(.+?)\\*\\*""")) { "<strong>${it.groupValues[1]}</strong>" }
+    html = html.replace(Regex("""\\*(.+?)\\*""")) { "<em>${it.groupValues[1]}</em>" }
+    html = html.replace(Regex("""\\[(.+?)\\]\\((.+?)\\)""")) { "<a href='${it.groupValues[2]}'>${it.groupValues[1]}</a>" }
     html = html.replace(Regex("""^> (.+)$""", RegexOption.MULTILINE)) { "<blockquote>${it.groupValues[1]}</blockquote>" }
     html = html.replace(Regex("""^- (.+)$""", RegexOption.MULTILINE)) { "<li>${it.groupValues[1]}</li>" }
-    html = html.replace("\n\n", "</p><p>")
+    html = html.replace("\\n\\n", "</p><p>")
     return "<p>$html</p>"
 }
 
@@ -162,3 +182,8 @@ fun RawPreview(content: String) {
         )
     }
 }
+'''
+
+with open("app/src/main/java/com/codemaster/aistudio/ui/screens/preview/PreviewScreen.kt", 'w') as f:
+    f.write(preview)
+print("Fixed PreviewScreen.kt")
