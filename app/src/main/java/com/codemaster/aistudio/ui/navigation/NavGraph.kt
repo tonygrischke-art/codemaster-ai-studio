@@ -24,7 +24,7 @@ sealed class Screen(val route: String) {
     object Editor   : Screen("editor/{projectId}/{fileId}") { fun createRoute(pid: Long, fid: Long = -1L) = "editor/$pid/$fid" }
     object Build    : Screen("build/{projectId}")    { fun createRoute(id: Long = -1L) = "build/$id" }
     object Terminal : Screen("terminal/{projectId}") { fun createRoute(id: Long = -1L) = "terminal/$id" }
-    object Git      : Screen("git/{projectId}")
+    object Git      : Screen("git/{projectId}")      { fun createRoute(id: Long = -1L) = "git/$id" }
     object Preview  : Screen("preview/{projectId}")
 }
 
