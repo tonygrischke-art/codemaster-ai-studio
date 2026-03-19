@@ -123,4 +123,16 @@ class AiChatViewModel @Inject constructor(
 
     fun clearHistory() { viewModelScope.launch { chatRepository.clearMessagesForProject(currentProjectId) } }
     fun clearError() { _uiState.value = _uiState.value.copy(error = null) }
+
+    fun saveContentAsFile(fileName: String, content: String) {
+        viewModelScope.launch {
+            val savePath = if (projectPath.isNotBlank()) "$projectPath/$fileName"
+                           else "/sdcard/$fileName"
+            fsRepository.writeFile(savePath, content).fold(
+                onSuccess = { _uiState.value = _uiState.value.copy(error = "Saved to $savePath") },
+                onFailure = { _uiState.value = _uiState.value.copy(error = "Save failed: ${it.message}") }
+            )
+        }
+    }
+
 }
