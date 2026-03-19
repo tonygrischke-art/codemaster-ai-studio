@@ -29,7 +29,7 @@ sealed class Screen(val route: String) {
 }
 
 @Composable
-fun NavGraph(navController: NavHostController, previewFile: String = "", previewContent: String = "") {
+fun NavGraph(navController: NavHostController) {
     NavHost(navController = navController, startDestination = Screen.Home.route) {
 
         composable(Screen.Home.route) {
