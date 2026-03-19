@@ -231,12 +231,8 @@ class AiChatViewModel @Inject constructor(
         if (text.isBlank() && state.attachedFileContent == null) return
         if (state.isLoading) return
         val attachedName = state.attachedFileName
-        val displayText = if (attachedName != null) "$text
- $attachedName" else text
-        val projectContextSection = state.projectContext?.let { "
-
-Project file tree:
-$it" } ?: ""
+        val displayText = if (attachedName != null) (text + "\n" + (attachedName ?: "")) else text
+        val projectContextSection = state.projectContext?.let { "\n\nProject file tree:\n$it" } ?: ""
         val enrichedSystemPrompt = state.currentPersona.systemPrompt + projectContextSection
         viewModelScope.launch {
             val userMessage = ChatMessage(

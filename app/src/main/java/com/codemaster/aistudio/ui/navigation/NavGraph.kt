@@ -25,7 +25,7 @@ sealed class Screen(val route: String) {
     object Build    : Screen("build/{projectId}")    { fun createRoute(id: Long = -1L) = "build/$id" }
     object Terminal : Screen("terminal/{projectId}") { fun createRoute(id: Long = -1L) = "terminal/$id" }
     object Git      : Screen("git/{projectId}")
-    object Preview  : Screen("preview/{projectId}") { fun createRoute(id: Long = -1L) = "preview/$id" }      { fun createRoute(id: Long = -1L) = "git/$id" }
+    object Preview  : Screen("preview/{projectId}") { fun createRoute(id: Long = -1L) = "preview/$id" }
 }
 
 @Composable
