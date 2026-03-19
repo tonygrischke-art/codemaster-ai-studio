@@ -17,6 +17,7 @@ data class HomeUiState(
     val isLoading: Boolean = false,
     val showNewProjectDialog: Boolean = false,
     val showImportDialog: Boolean = false,
+    val showTemplateDialog: Boolean = false,
     val newProjectName: String = "",
     val newProjectLanguage: String = "Kotlin",
     val newProjectDescription: String = "",
@@ -97,4 +98,21 @@ class HomeViewModel @Inject constructor(
 
     fun deleteProject(project: Project) { viewModelScope.launch { projectRepository.deleteProject(project) } }
     fun clearError() { _uiState.value = _uiState.value.copy(error = null) }
+
+    fun showTemplateDialog() { _uiState.value = _uiState.value.copy(showTemplateDialog = true) }
+    fun hideTemplateDialog() { _uiState.value = _uiState.value.copy(showTemplateDialog = false) }
+
+    fun createFromTemplate(template: com.codemaster.aistudio.data.templates.ProjectTemplate, basePath: String) {
+        viewModelScope.launch {
+            val projectPath = "$basePath/${template.name.replace(" ", "-").lowercase()}"
+            java.io.File(projectPath).mkdirs()
+            template.files.forEach { (relPath, content) ->
+                val file = java.io.File(projectPath, relPath)
+                file.parentFile?.mkdirs()
+                file.writeText(content)
+            }
+            val id = projectRepository.createProject(template.name, template.language, "Loaded from: $projectPath")
+            hideTemplateDialog()
+        }
+    }
 }
