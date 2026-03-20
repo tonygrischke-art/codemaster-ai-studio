@@ -26,6 +26,8 @@ fun GitScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
+    var commitMessage by remember { mutableStateOf("") }
+    var showQuickCommit by remember { mutableStateOf(false) }
 
     LaunchedEffect(projectId) { viewModel.init(projectId) }
 
@@ -35,17 +37,14 @@ fun GitScreen(
                 title = { Text("Git", fontWeight = FontWeight.Bold) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") } },
                 actions = {
-                    IconButton(onClick = { viewModel.refresh() }) {
-                        if (uiState.isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        else Icon(Icons.Default.Refresh, "Refresh")
-                    }
+                    IconButton(onClick = { viewModel.refresh() }) { Icon(Icons.Default.Refresh, "Refresh") }
                 }
             )
         }
     ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(scrollState),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Status card
             Card(shape = RoundedCornerShape(12.dp)) {
@@ -53,123 +52,120 @@ fun GitScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.AccountTree, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Status", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                        Text("Repository Status", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
                     }
                     HorizontalDivider()
-                    if (!uiState.status.isRepo) {
-                        Text("Not a git repository", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                        Text("Repo path: " + uiState.repoPath, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                    } else {
-                        GitInfoRow("Branch", uiState.status.branch)
-                        GitInfoRow("Last commit", uiState.status.lastCommit.take(60))
-                        GitInfoRow("Staged", uiState.status.staged.size.toString() + " files")
-                        GitInfoRow("Unstaged", uiState.status.unstaged.size.toString() + " files")
-                        GitInfoRow("Untracked", uiState.status.untracked.size.toString() + " files")
+                    if (uiState.currentBranch.isNotBlank()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CallSplit, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Branch: ${uiState.currentBranch}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        }
                     }
+                    Text(uiState.status.ifBlank { "No status" }, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
-            // Result/error messages
-            uiState.result?.let { msg ->
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20).copy(alpha = 0.3f))
-                ) {
-                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF69F0AE), modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(msg, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
-                    }
-                }
-            }
-            uiState.error?.let { err ->
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-                ) {
-                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Error, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(err, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.weight(1f))
-                        IconButton(onClick = { viewModel.clearMessages() }, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.Close, null, modifier = Modifier.size(14.dp)) }
-                    }
-                }
-            }
-
-            // Commit section
-            Card(shape = RoundedCornerShape(12.dp)) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Commit, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Commit", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                    }
-                    HorizontalDivider()
+            // One-tap Quick Commit + Push
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Quick Commit & Push", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
                     OutlinedTextField(
-                        value = uiState.commitMessage,
-                        onValueChange = { viewModel.updateCommitMessage(it) },
+                        value = commitMessage,
+                        onValueChange = { commitMessage = it },
                         label = { Text("Commit message") },
+                        placeholder = { Text("feat: describe your changes") },
                         modifier = Modifier.fillMaxWidth(),
-                        minLines = 2, maxLines = 4,
-                        placeholder = { Text("feat: add new feature") }
+                        singleLine = true,
+                        trailingIcon = {
+                            if (commitMessage.isNotBlank()) {
+                                IconButton(onClick = { commitMessage = "" }) {
+                                    Icon(Icons.Default.Clear, null, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
                     )
-                    Button(
-                        onClick = { viewModel.stageAndCommit() },
-                        enabled = uiState.commitMessage.isNotBlank() && !uiState.isLoading && uiState.status.isRepo,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Stage All & Commit")
+                    // Quick message chips
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("feat: ", "fix: ", "chore: ", "docs: ").forEach { prefix ->
+                            SuggestionChip(onClick = { commitMessage = prefix }, label = { Text(prefix, style = MaterialTheme.typography.labelSmall) })
+                        }
                     }
-                }
-            }
-
-            // Push/Pull
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(
-                    onClick = { viewModel.push() },
-                    enabled = !uiState.isLoading && uiState.status.isRepo,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Upload, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Push")
-                }
-                OutlinedButton(
-                    onClick = { viewModel.pull() },
-                    enabled = !uiState.isLoading && uiState.status.isRepo,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Download, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Pull")
-                }
-            }
-
-            // Log
-            if (uiState.log.isNotBlank()) {
-                Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22))) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text("Recent Commits", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = Color(0xFF8B949E))
-                        Spacer(Modifier.height(8.dp))
-                        uiState.log.lines().forEach { line ->
-                            Text(line, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = Color(0xFF58A6FF), lineHeight = 18.sp)
+                    Button(
+                        onClick = {
+                            if (commitMessage.isNotBlank()) {
+                                viewModel.commitAndPush(commitMessage)
+                                commitMessage = ""
+                            }
+                        },
+                        enabled = commitMessage.isNotBlank() && !uiState.isLoading,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        if (uiState.isLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Committing & Pushing...")
+                        } else {
+                            Icon(Icons.Default.Upload, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Commit & Push", fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
 
+            // Individual operations
+            Card(shape = RoundedCornerShape(12.dp)) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Git Operations", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                    HorizontalDivider()
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { viewModel.pull() }, modifier = Modifier.weight(1f), enabled = !uiState.isLoading) {
+                            Icon(Icons.Default.Download, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Pull")
+                        }
+                        OutlinedButton(onClick = { viewModel.push() }, modifier = Modifier.weight(1f), enabled = !uiState.isLoading) {
+                            Icon(Icons.Default.Upload, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Push")
+                        }
+                    }
+                    OutlinedButton(onClick = { viewModel.stageAll() }, modifier = Modifier.fillMaxWidth(), enabled = !uiState.isLoading) {
+                        Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Stage All Changes (git add -A)")
+                    }
+                }
+            }
+
+            // Log output
+            if (uiState.log.isNotEmpty()) {
+                Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1117))) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                        Text("Output", style = MaterialTheme.typography.labelSmall, color = Color(0xFF58A6FF), fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(4.dp))
+                        uiState.log.takeLast(15).forEach { line ->
+                            val color = when {
+                                line.contains("error", ignoreCase = true) -> Color(0xFFFF5252)
+                                line.contains("success", ignoreCase = true) || line.contains("pushed") -> Color(0xFF69F0AE)
+                                else -> Color(0xFF58A6FF)
+                            }
+                            Text(line, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = color, lineHeight = 15.sp)
+                        }
+                    }
+                }
+            }
+
+            uiState.error?.let { err ->
+                Snackbar(action = { TextButton(onClick = { viewModel.clearError() }) { Text("OK") } }) { Text(err) }
+            }
+
             Spacer(Modifier.height(32.dp))
         }
-    }
-}
-
-@Composable
-fun GitInfoRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(90.dp))
-        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, fontFamily = FontFamily.Monospace)
     }
 }

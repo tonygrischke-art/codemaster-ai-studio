@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.codemaster.aistudio.data.model.Project
+import com.codemaster.aistudio.ui.components.FileBrowserDialog
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -57,6 +58,13 @@ fun HomeScreen(
         },
         floatingActionButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                // AI App Builder FAB
+                SmallFloatingActionButton(
+                    onClick = { viewModel.showAiBuilder() },
+                    containerColor = MaterialTheme.colorScheme.tertiary
+                ) {
+                    Icon(Icons.Default.AutoAwesome, "AI Build", tint = MaterialTheme.colorScheme.onTertiary)
+                }
                 SmallFloatingActionButton(
                     onClick = { viewModel.showImportDialog() },
                     containerColor = MaterialTheme.colorScheme.secondaryContainer
@@ -73,20 +81,25 @@ fun HomeScreen(
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when {
-                uiState.isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                uiState.projects.isEmpty() -> Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) { Spacer(Modifier.height(16.dp)); QuickActionsBar(onBrowseFiles = { viewModel.showImportDialog() }, onOpenChat = { uiState.projects.firstOrNull()?.let { onOpenChat(it.id) } }); Spacer(Modifier.weight(1f)); EmptyProjectsPlaceholder(); Spacer(Modifier.weight(1f)) }
-                else -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    item {
-                        QuickActionsBar(
-                            onBrowseFiles = { viewModel.showImportDialog() },
-                            onOpenChat = { uiState.projects.firstOrNull()?.let { onOpenChat(it.id) } }
-                        )
-                    }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Quick Actions - ALWAYS visible
+                item {
+                    QuickActionsBar(
+                        onBrowseFiles = { viewModel.showFileBrowserDialog() },
+                        onOpenChat = { uiState.projects.firstOrNull()?.let { onOpenChat(it.id) } },
+                        onAiBuilder = { viewModel.showAiBuilder() }
+                    )
+                }
+
+                if (uiState.isLoading) {
+                    item { Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
+                } else if (uiState.projects.isEmpty()) {
+                    item { EmptyProjectsPlaceholder() }
+                } else {
                     item {
                         Text("Projects (${uiState.projects.size})", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -101,9 +114,10 @@ fun HomeScreen(
                             onDelete = { viewModel.deleteProject(project) }
                         )
                     }
-                    item { Spacer(Modifier.height(100.dp)) }
                 }
+                item { Spacer(Modifier.height(100.dp)) }
             }
+
             uiState.error?.let { error ->
                 Snackbar(
                     modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
@@ -112,6 +126,7 @@ fun HomeScreen(
             }
         }
 
+        // Dialogs
         if (uiState.showNewProjectDialog) {
             NewProjectDialog(
                 name = uiState.newProjectName, language = uiState.newProjectLanguage,
@@ -128,39 +143,163 @@ fun HomeScreen(
             ImportProjectDialog(
                 path = uiState.importPath,
                 onPathChange = viewModel::updateImportPath,
+                onBrowse = { viewModel.showFileBrowserDialog() },
                 onImport = { viewModel.importProject { id -> onOpenEditor(id) } },
                 onDismiss = viewModel::hideImportDialog
+            )
+        }
+
+        if (uiState.showFileBrowserDialog) {
+            FileBrowserDialog(
+                startPath = "/sdcard",
+                onPathSelected = { path ->
+                    viewModel.updateImportPath(path)
+                    viewModel.hideFileBrowserDialog()
+                    viewModel.showImportDialog()
+                },
+                onDismiss = { viewModel.hideFileBrowserDialog() }
+            )
+        }
+
+        if (uiState.showAiBuilderDialog) {
+            AiAppBuilderDialog(
+                prompt = uiState.aiBuilderPrompt,
+                language = uiState.aiBuilderLanguage,
+                isBuilding = uiState.isAiBuilding,
+                onPromptChange = viewModel::updateAiBuilderPrompt,
+                onLanguageChange = viewModel::updateAiBuilderLanguage,
+                onBuild = { viewModel.buildAppWithAi { id -> onOpenEditor(id) } },
+                onDismiss = viewModel::hideAiBuilder
             )
         }
     }
 }
 
 @Composable
-fun QuickActionsBar(onBrowseFiles: () -> Unit, onOpenChat: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Button(
-            onClick = onOpenChat,
-            modifier = Modifier.weight(1f).height(52.dp),
-            shape = RoundedCornerShape(14.dp)
-        ) {
-            Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("AI Chat", fontWeight = FontWeight.Bold)
+fun QuickActionsBar(
+    onBrowseFiles: () -> Unit,
+    onOpenChat: () -> Unit,
+    onAiBuilder: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = onOpenChat,
+                modifier = Modifier.weight(1f).height(52.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("AI Chat", fontWeight = FontWeight.Bold)
+            }
+            OutlinedButton(
+                onClick = onBrowseFiles,
+                modifier = Modifier.weight(1f).height(52.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Browse", fontWeight = FontWeight.Bold)
+            }
         }
-        OutlinedButton(
-            onClick = onBrowseFiles,
-            modifier = Modifier.weight(1f).height(52.dp),
-            shape = RoundedCornerShape(14.dp)
+        // AI App Builder button - full width
+        Button(
+            onClick = onAiBuilder,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.tertiary
+            )
         ) {
-            Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("Browse", fontWeight = FontWeight.Bold)
+            Icon(Icons.Default.Build, null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Build App with AI", fontWeight = FontWeight.Bold, fontSize = 15.sp)
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ImportProjectDialog(path: String, onPathChange: (String) -> Unit, onImport: () -> Unit, onDismiss: () -> Unit) {
+fun AiAppBuilderDialog(
+    prompt: String,
+    language: String,
+    isBuilding: Boolean,
+    onPromptChange: (String) -> Unit,
+    onLanguageChange: (String) -> Unit,
+    onBuild: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var langExpanded by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = { if (!isBuilding) onDismiss() },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.AutoAwesome, null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(8.dp))
+                Text("AI App Builder", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Describe the app you want to build and AI will generate the complete project.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = prompt,
+                    onValueChange = onPromptChange,
+                    label = { Text("Describe your app") },
+                    placeholder = { Text("e.g. A todo list app with categories and due dates") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3, maxLines = 6,
+                    enabled = !isBuilding
+                )
+                ExposedDropdownMenuBox(expanded = langExpanded, onExpandedChange = { langExpanded = it }) {
+                    OutlinedTextField(
+                        value = language, onValueChange = {}, readOnly = true,
+                        label = { Text("Language") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(langExpanded) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        enabled = !isBuilding
+                    )
+                    ExposedDropdownMenu(expanded = langExpanded, onDismissRequest = { langExpanded = false }) {
+                        LANGUAGES.forEach { lang ->
+                            DropdownMenuItem(text = { Text(lang) }, onClick = { onLanguageChange(lang); langExpanded = false })
+                        }
+                    }
+                }
+                if (isBuilding) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Text("AI is building your app...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onBuild, enabled = prompt.isNotBlank() && !isBuilding) {
+                if (isBuilding) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Build It")
+                }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isBuilding) { Text("Cancel") } }
+    )
+}
+
+@Composable
+fun ImportProjectDialog(
+    path: String,
+    onPathChange: (String) -> Unit,
+    onBrowse: () -> Unit,
+    onImport: () -> Unit,
+    onDismiss: () -> Unit
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -172,13 +311,18 @@ fun ImportProjectDialog(path: String, onPathChange: (String) -> Unit, onImport: 
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Enter the full path to your project folder:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Enter path or tap Browse to navigate:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedTextField(
                     value = path, onValueChange = onPathChange,
                     label = { Text("Folder path") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2, maxLines = 3,
-                    placeholder = { Text("/sdcard/my-project") }
+                    placeholder = { Text("/sdcard/my-project") },
+                    trailingIcon = {
+                        IconButton(onClick = onBrowse) {
+                            Icon(Icons.Default.FolderOpen, "Browse", tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                 )
                 Text("Quick paths:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 listOf(
@@ -228,7 +372,11 @@ fun ProjectCard(
                 Box {
                     IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, null) }
                     DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                        DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, onClick = { showMenu = false; onDelete() }, leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) })
+                        DropdownMenuItem(
+                            text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                            onClick = { showMenu = false; onDelete() },
+                            leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
+                        )
                     }
                 }
             }
@@ -266,7 +414,8 @@ fun EmptyProjectsPlaceholder(modifier: Modifier = Modifier) {
         Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outlineVariant)
         Spacer(Modifier.height(16.dp))
         Text("No projects yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-        Text("Tap Browse to load or + to create a project", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(8.dp))
+        Text("Browse to load, + to create, or let AI build one for you", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

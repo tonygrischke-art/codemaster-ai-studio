@@ -1,110 +1,113 @@
 package com.codemaster.aistudio.ui.screens.git
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.codemaster.aistudio.data.repository.GitRepository
-import com.codemaster.aistudio.data.repository.GitStatus
+import com.codemaster.aistudio.data.repository.ProjectRepository
+import com.codemaster.aistudio.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.BufferedReader
 import java.io.File
+import java.io.InputStreamReader
 import javax.inject.Inject
 
 data class GitUiState(
-    val status: GitStatus = GitStatus(),
-    val commitMessage: String = "",
+    val projectPath: String = "",
+    val currentBranch: String = "",
+    val status: String = "",
+    val log: List<String> = emptyList(),
     val isLoading: Boolean = false,
-    val log: String = "",
-    val result: String? = null,
-    val error: String? = null,
-    val repoPath: String = ""
+    val error: String? = null
 )
 
 @HiltViewModel
 class GitViewModel @Inject constructor(
-    private val gitRepository: GitRepository,
-    @ApplicationContext private val context: Context
+    private val projectRepository: ProjectRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GitUiState())
     val uiState: StateFlow<GitUiState> = _uiState.asStateFlow()
 
     fun init(projectId: Long) {
-        // Find repo - check Termux home first, then app files dir
-        val paths = listOf(
-            android.os.Environment.getExternalStorageDirectory().absolutePath + "/codemaster-ai-studio",
-            context.filesDir.absolutePath
-        )
-        val repoPath = paths.firstOrNull { File(it, ".git").exists() } ?: paths.first()
-        _uiState.value = _uiState.value.copy(repoPath = repoPath)
-        refresh()
+        viewModelScope.launch {
+            val project = projectRepository.getProjectById(projectId)
+            val path = project?.path ?: return@launch
+            _uiState.value = _uiState.value.copy(projectPath = path)
+            refresh()
+        }
     }
 
     fun refresh() {
+        val path = _uiState.value.projectPath
+        if (path.isBlank()) return
+        viewModelScope.launch {
+            val branch = runGit(path, listOf("git", "branch", "--show-current")).trim()
+            val status = runGit(path, listOf("git", "status", "--short"))
+            _uiState.value = _uiState.value.copy(currentBranch = branch, status = status.ifBlank { "Working tree clean" })
+        }
+    }
+
+    fun stageAll() {
+        runGitCommand(listOf("git", "add", "-A"), "Staged all changes")
+    }
+
+    fun commitAndPush(message: String) {
+        val path = _uiState.value.projectPath
+        if (path.isBlank()) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            val result = gitRepository.getStatus(_uiState.value.repoPath)
-            result.fold(
-                onSuccess = { status ->
-                    val logResult = gitRepository.log(_uiState.value.repoPath)
-                    _uiState.value = _uiState.value.copy(
-                        status = status,
-                        log = logResult.getOrElse { "" },
-                        isLoading = false
-                    )
-                },
-                onFailure = { e ->
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
-                }
-            )
+            addLog("Staging all changes...")
+            runGit(path, listOf("git", "add", "-A"))
+            addLog("Committing: $message")
+            val commitOut = runGit(path, listOf("git", "commit", "-m", message))
+            addLog(commitOut.trim())
+            addLog("Pushing to origin...")
+            val pushOut = runGit(path, listOf("git", "push", "origin", "HEAD"))
+            addLog(pushOut.trim())
+            addLog("Done!")
+            _uiState.value = _uiState.value.copy(isLoading = false)
+            refresh()
         }
     }
 
-    fun updateCommitMessage(msg: String) { _uiState.value = _uiState.value.copy(commitMessage = msg) }
+    fun push() = runGitCommand(listOf("git", "push", "origin", "HEAD"), "Pushing...")
+    fun pull() = runGitCommand(listOf("git", "pull"), "Pulling...")
 
-    fun stageAndCommit() {
-        val msg = _uiState.value.commitMessage.trim()
-        if (msg.isBlank()) { _uiState.value = _uiState.value.copy(error = "Commit message cannot be empty"); return }
+    private fun runGitCommand(cmd: List<String>, label: String) {
+        val path = _uiState.value.projectPath
+        if (path.isBlank()) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            gitRepository.stageAll(_uiState.value.repoPath).fold(
-                onSuccess = {
-                    gitRepository.commit(_uiState.value.repoPath, msg).fold(
-                        onSuccess = { out ->
-                            _uiState.value = _uiState.value.copy(isLoading = false, result = "Committed: $out", commitMessage = "")
-                            refresh()
-                        },
-                        onFailure = { e -> _uiState.value = _uiState.value.copy(isLoading = false, error = e.message) }
-                    )
-                },
-                onFailure = { e -> _uiState.value = _uiState.value.copy(isLoading = false, error = e.message) }
-            )
+            addLog(label)
+            val out = runGit(path, cmd)
+            addLog(out.trim().ifBlank { "Done" })
+            _uiState.value = _uiState.value.copy(isLoading = false)
+            refresh()
         }
     }
 
-    fun push() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, result = null)
-            gitRepository.push(_uiState.value.repoPath).fold(
-                onSuccess = { out -> _uiState.value = _uiState.value.copy(isLoading = false, result = "Pushed! " + out) },
-                onFailure = { e  -> _uiState.value = _uiState.value.copy(isLoading = false, error = e.message) }
-            )
+    private suspend fun runGit(path: String, cmd: List<String>): String = withContext(Dispatchers.IO) {
+        try {
+            val process = ProcessBuilder(cmd).directory(File(path)).redirectErrorStream(true).start()
+            val output = BufferedReader(InputStreamReader(process.inputStream)).readText()
+            process.waitFor()
+            output
+        } catch (e: Exception) {
+            "Error: ${e.message}"
         }
     }
 
-    fun pull() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, result = null)
-            gitRepository.pull(_uiState.value.repoPath).fold(
-                onSuccess = { out -> _uiState.value = _uiState.value.copy(isLoading = false, result = out); refresh() },
-                onFailure = { e  -> _uiState.value = _uiState.value.copy(isLoading = false, error = e.message) }
-            )
-        }
+    private fun addLog(msg: String) {
+        val ts = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+        val logs = (_uiState.value.log + "[$ts] $msg").takeLast(30)
+        _uiState.value = _uiState.value.copy(log = logs)
     }
 
-    fun clearMessages() { _uiState.value = _uiState.value.copy(result = null, error = null) }
+    fun clearError() { _uiState.value = _uiState.value.copy(error = null) }
 }
