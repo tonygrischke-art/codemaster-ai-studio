@@ -17,11 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-data class CodeError(
-    val line: Int,
-    val message: String,
-    val severity: String = "error" // "error" or "warning"
-)
+data class CodeError(val line: Int, val message: String, val severity: String = "error")
 
 data class EditorUiState(
     val projectName: String = "",
@@ -43,7 +39,7 @@ data class EditorUiState(
     val recentFiles: List<DiskFile> = emptyList(),
     val searchQuery: String = "",
     val error: String? = null,
-    // AI features
+    val successMessage: String? = null,
     val isAiWriting: Boolean = false,
     val aiSuggestion: String? = null,
     val isLoadingAiSuggestion: Boolean = false,
@@ -64,20 +60,19 @@ class CodeEditorViewModel @Inject constructor(
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
     private var errorCheckJob: Job? = null
     private var suggestionJob: Job? = null
+    private var autoSaveJob: Job? = null
 
     fun init(projectId: Long, fileId: Long) {
         viewModelScope.launch {
             val project = projectRepository.getProjectById(projectId)
             val name = project?.name ?: "Editor"
-            val rootPath = project?.path ?: run {
-                val desc = project?.description ?: ""
-                when {
-                    desc.startsWith("Loaded from: ") -> desc.removePrefix("Loaded from: ")
-                    desc.startsWith("Imported from: ") -> desc.removePrefix("Imported from: ")
-                    else -> ""
-                }
-            }
-            _uiState.value = _uiState.value.copy(projectName = name, rootPath = rootPath, newFileDir = rootPath)
+            // Use the proper path resolution
+            val rootPath = projectRepository.getProjectPath(projectId)
+            _uiState.value = _uiState.value.copy(
+                projectName = name,
+                rootPath = rootPath,
+                newFileDir = rootPath
+            )
             if (rootPath.isNotBlank()) scanFiles(rootPath)
         }
     }
@@ -88,7 +83,10 @@ class CodeEditorViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoadingFiles = true)
             fsRepository.scanDirectory(path).fold(
                 onSuccess = { files ->
-                    _uiState.value = _uiState.value.copy(files = files, rootPath = path, newFileDir = path, isLoadingFiles = false, expandedDirs = setOf(path))
+                    _uiState.value = _uiState.value.copy(
+                        files = files, rootPath = path, newFileDir = path,
+                        isLoadingFiles = false, expandedDirs = setOf(path)
+                    )
                 },
                 onFailure = { e -> _uiState.value = _uiState.value.copy(isLoadingFiles = false, error = e.message) }
             )
@@ -109,7 +107,11 @@ class CodeEditorViewModel @Inject constructor(
                 onSuccess = { content ->
                     val lang = fsRepository.getLanguageFromExtension(file.extension)
                     val recent = (_uiState.value.recentFiles.filter { it.path != file.path } + file).takeLast(10)
-                    _uiState.value = _uiState.value.copy(currentFile = file, content = content, language = lang, isDirty = false, recentFiles = recent, liveErrors = emptyList(), aiSuggestion = null)
+                    _uiState.value = _uiState.value.copy(
+                        currentFile = file, content = content, language = lang,
+                        isDirty = false, recentFiles = recent,
+                        liveErrors = emptyList(), aiSuggestion = null
+                    )
                 },
                 onFailure = { e -> _uiState.value = _uiState.value.copy(error = e.message) }
             )
@@ -119,78 +121,76 @@ class CodeEditorViewModel @Inject constructor(
     fun updateContent(content: String) {
         _uiState.value = _uiState.value.copy(content = content, isDirty = true, aiSuggestion = null)
         scheduleErrorCheck(content)
+        scheduleAutoSave()
     }
 
-    // ── Live error detection ─────────────────────────────────
+    private fun scheduleAutoSave() {
+        autoSaveJob?.cancel()
+        autoSaveJob = viewModelScope.launch {
+            delay(2000)
+            saveCurrentFile(silent = true)
+        }
+    }
+
     private fun scheduleErrorCheck(content: String) {
         errorCheckJob?.cancel()
         errorCheckJob = viewModelScope.launch {
-            delay(800) // debounce
-            val errors = detectBasicErrors(content, _uiState.value.language)
+            delay(800)
+            val errors = detectErrors(content, _uiState.value.language)
             _uiState.value = _uiState.value.copy(liveErrors = errors)
         }
     }
 
-    private fun detectBasicErrors(content: String, language: String): List<CodeError> {
+    private fun detectErrors(content: String, language: String): List<CodeError> {
         val errors = mutableListOf<CodeError>()
         val lines = content.lines()
         lines.forEachIndexed { idx, line ->
             val lineNum = idx + 1
+            if (line.contains("TODO(") || line.contains("FIXME")) {
+                errors.add(CodeError(lineNum, "TODO/FIXME needs attention", "warning"))
+            }
+            if (line.length > 120) {
+                errors.add(CodeError(lineNum, "Line too long (${line.length} chars)", "warning"))
+            }
             when (language) {
-                "kotlin", "java" -> {
-                    if (line.trimEnd().endsWith("{") && !line.contains("//")) {
-                        // Check for unclosed braces (very basic)
-                    }
-                    if (line.contains("TODO(") || line.contains("FIXME")) {
-                        errors.add(CodeError(lineNum, "TODO/FIXME marker", "warning"))
-                    }
-                    if (line.length > 120) {
-                        errors.add(CodeError(lineNum, "Line too long (${line.length} chars)", "warning"))
-                    }
-                }
                 "python" -> {
-                    if (line.contains("\t") && content.contains("    ")) {
-                        errors.add(CodeError(lineNum, "Mixed tabs and spaces", "error"))
-                    }
                     if (line.trimStart().startsWith("except:")) {
-                        errors.add(CodeError(lineNum, "Bare except clause — specify exception type", "warning"))
+                        errors.add(CodeError(lineNum, "Bare except — specify exception type", "warning"))
                     }
                 }
                 "json" -> {
-                    if (line.trimEnd().endsWith(",") && lines.getOrNull(idx + 1)?.trim()?.let { it.startsWith("}") || it.startsWith("]") } == true) {
+                    val nextLine = lines.getOrNull(idx + 1)?.trim() ?: ""
+                    if (line.trimEnd().endsWith(",") && (nextLine.startsWith("}") || nextLine.startsWith("]"))) {
                         errors.add(CodeError(lineNum, "Trailing comma in JSON", "error"))
                     }
                 }
             }
         }
-        // Check bracket balance
-        val opens = content.count { it == '{' }
-        val closes = content.count { it == '}' }
-        if (opens != closes && (language == "kotlin" || language == "java")) {
-            errors.add(CodeError(0, "Unbalanced braces: $opens { vs $closes }", "error"))
+        if (language in listOf("kotlin", "java")) {
+            val opens = content.count { it == '{' }
+            val closes = content.count { it == '}' }
+            if (opens != closes) {
+                errors.add(CodeError(0, "Unbalanced braces: $opens { vs $closes }", "error"))
+            }
         }
         return errors
     }
 
-    // ── Inline AI suggestion ─────────────────────────────────
     fun requestInlineSuggestion() {
         val state = _uiState.value
-        val file = state.currentFile ?: return
-        val content = state.content
-        if (content.isBlank()) return
-
+        if (state.content.isBlank()) return
         suggestionJob?.cancel()
         suggestionJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingAiSuggestion = true, aiSuggestion = null)
-            val prompt = "Continue or complete this ${state.language} code. Return ONLY the code to insert next, no explanation:\n\n${content.takeLast(2000)}"
             val result = aiRepository.sendMessage(
                 history = emptyList(),
-                userMessage = prompt,
-                systemPrompt = "You are a code completion engine. Return only raw code, no markdown, no explanation."
+                userMessage = "Continue this ${state.language} code:\n\n${state.content.takeLast(2000)}",
+                systemPrompt = "You are a code completion engine. Return only raw code to insert next, no explanation, no markdown."
             )
             result.fold(
                 onSuccess = { suggestion ->
-                    _uiState.value = _uiState.value.copy(aiSuggestion = suggestion.trim(), isLoadingAiSuggestion = false)
+                    val clean = suggestion.removePrefix("```${state.language}").removePrefix("```").removeSuffix("```").trim()
+                    _uiState.value = _uiState.value.copy(aiSuggestion = clean, isLoadingAiSuggestion = false)
                 },
                 onFailure = { _uiState.value = _uiState.value.copy(isLoadingAiSuggestion = false) }
             )
@@ -205,23 +205,22 @@ class CodeEditorViewModel @Inject constructor(
 
     fun dismissSuggestion() { _uiState.value = _uiState.value.copy(aiSuggestion = null) }
 
-    // ── AI writes directly to file ───────────────────────────
     fun aiWriteToFile(instruction: String) {
         val state = _uiState.value
         val file = state.currentFile ?: run {
-            _uiState.value = _uiState.value.copy(error = "No file open")
-            return
+            _uiState.value = _uiState.value.copy(error = "No file open"); return
         }
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isAiWriting = true)
-            val prompt = """You are editing the file: ${file.name}
-Current content:
-${state.content.take(4000)}
-
-Instruction: $instruction
-
-Return the COMPLETE updated file content only. No markdown, no explanation, just the raw file content."""
-
+            val prompt = buildString {
+                appendLine("File: ${file.name}")
+                appendLine("Current content:")
+                appendLine(state.content.take(4000))
+                appendLine()
+                appendLine("Instruction: $instruction")
+                appendLine()
+                append("Return the COMPLETE updated file content only. No markdown, no explanation.")
+            }
             val result = aiRepository.sendMessage(
                 history = emptyList(),
                 userMessage = prompt,
@@ -229,34 +228,34 @@ Return the COMPLETE updated file content only. No markdown, no explanation, just
             )
             result.fold(
                 onSuccess = { newContent ->
-                    // Strip markdown fences if AI added them
                     val clean = newContent
                         .removePrefix("```${state.language}").removePrefix("```")
                         .removeSuffix("```").trim()
-                    _uiState.value = _uiState.value.copy(content = clean, isDirty = true, isAiWriting = false)
-                    // Auto-save
                     fsRepository.writeFile(file.path, clean)
-                    _uiState.value = _uiState.value.copy(isDirty = false)
+                    _uiState.value = _uiState.value.copy(content = clean, isDirty = false, isAiWriting = false, successMessage = "AI wrote changes to ${file.name}")
                 },
-                onFailure = { e ->
-                    _uiState.value = _uiState.value.copy(isAiWriting = false, error = "AI write failed: ${e.message}")
-                }
+                onFailure = { e -> _uiState.value = _uiState.value.copy(isAiWriting = false, error = "AI write failed: ${e.message}") }
             )
         }
     }
 
     fun updateAiPrompt(p: String) { _uiState.value = _uiState.value.copy(aiPrompt = p) }
     fun toggleAiPanel() { _uiState.value = _uiState.value.copy(showAiPanel = !_uiState.value.showAiPanel) }
-
     fun updateCursor(line: Int, col: Int) { _uiState.value = _uiState.value.copy(cursorLine = line, cursorCol = col) }
 
-    fun saveCurrentFile() {
+    fun saveCurrentFile(silent: Boolean = false) {
         val state = _uiState.value
         val file = state.currentFile ?: return
+        if (!state.isDirty) return
         viewModelScope.launch {
-            _uiState.value = state.copy(isSaving = true)
+            if (!silent) _uiState.value = state.copy(isSaving = true)
             fsRepository.writeFile(file.path, state.content).fold(
-                onSuccess = { _uiState.value = _uiState.value.copy(isSaving = false, isDirty = false) },
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(
+                        isSaving = false, isDirty = false,
+                        successMessage = if (silent) null else "Saved"
+                    )
+                },
                 onFailure = { e -> _uiState.value = _uiState.value.copy(isSaving = false, error = e.message) }
             )
         }
@@ -286,7 +285,9 @@ Return the COMPLETE updated file content only. No markdown, no explanation, just
     fun deleteFile(file: DiskFile) {
         viewModelScope.launch {
             fsRepository.deleteFile(file.path)
-            if (_uiState.value.currentFile?.path == file.path) _uiState.value = _uiState.value.copy(currentFile = null, content = "")
+            if (_uiState.value.currentFile?.path == file.path) {
+                _uiState.value = _uiState.value.copy(currentFile = null, content = "")
+            }
             scanFiles()
         }
     }
@@ -294,13 +295,16 @@ Return the COMPLETE updated file content only. No markdown, no explanation, just
     fun toggleFileTree() { _uiState.value = _uiState.value.copy(showFileTree = !_uiState.value.showFileTree) }
     fun updateSearch(q: String) { _uiState.value = _uiState.value.copy(searchQuery = q) }
     fun clearError() { _uiState.value = _uiState.value.copy(error = null) }
+    fun clearSuccess() { _uiState.value = _uiState.value.copy(successMessage = null) }
 
     fun getVisibleFiles(): List<DiskFile> {
         val state = _uiState.value
         val query = state.searchQuery.trim()
         val root = state.rootPath
         return if (query.isNotBlank()) {
-            state.files.filter { !it.isDirectory && (it.name.contains(query, ignoreCase = true) || it.relativePath.contains(query, ignoreCase = true)) }
+            state.files.filter {
+                !it.isDirectory && (it.name.contains(query, ignoreCase = true) || it.relativePath.contains(query, ignoreCase = true))
+            }
         } else {
             state.files.filter { file ->
                 val parentPath = file.path.substringBeforeLast("/")

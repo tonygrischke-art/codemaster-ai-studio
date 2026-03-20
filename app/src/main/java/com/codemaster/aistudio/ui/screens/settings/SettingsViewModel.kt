@@ -18,6 +18,7 @@ data class SettingsUiState(
     val githubOwner: String = "",
     val githubRepo: String = "",
     val githubBranch: String = "main",
+    val projectPath: String = "/sdcard/codemaster-ai-studio",
     val isSaved: Boolean = false
 )
 
@@ -45,18 +46,20 @@ class SettingsViewModel @Inject constructor(
                 githubToken  = settingsRepository.getGitHubToken(),
                 githubOwner  = settingsRepository.getGitHubOwner(),
                 githubRepo   = settingsRepository.getGitHubRepo(),
-                githubBranch = settingsRepository.getGitHubBranch().ifBlank { "main" }
+                githubBranch = settingsRepository.getGitHubBranch().ifBlank { "main" },
+                projectPath  = settingsRepository.getProjectPath().ifBlank { "/sdcard/codemaster-ai-studio" }
             )
         }
     }
 
-    fun updateApiKey(k: String)       { _uiState.value = _uiState.value.copy(apiKey = k, isSaved = false) }
-    fun updateModel(m: String)        { _uiState.value = _uiState.value.copy(model = m, isSaved = false) }
-    fun toggleTheme()                 { _uiState.value = _uiState.value.copy(isDarkTheme = !_uiState.value.isDarkTheme, isSaved = false) }
-    fun updateGithubToken(t: String)  { _uiState.value = _uiState.value.copy(githubToken = t, isSaved = false) }
-    fun updateGithubOwner(o: String)  { _uiState.value = _uiState.value.copy(githubOwner = o, isSaved = false) }
-    fun updateGithubRepo(r: String)   { _uiState.value = _uiState.value.copy(githubRepo = r, isSaved = false) }
-    fun updateGithubBranch(b: String) { _uiState.value = _uiState.value.copy(githubBranch = b, isSaved = false) }
+    fun updateApiKey(k: String)         { _uiState.value = _uiState.value.copy(apiKey = k, isSaved = false) }
+    fun updateModel(m: String)          { _uiState.value = _uiState.value.copy(model = m, isSaved = false) }
+    fun toggleTheme()                   { _uiState.value = _uiState.value.copy(isDarkTheme = !_uiState.value.isDarkTheme, isSaved = false) }
+    fun updateGithubToken(t: String)    { _uiState.value = _uiState.value.copy(githubToken = t, isSaved = false) }
+    fun updateGithubOwner(o: String)    { _uiState.value = _uiState.value.copy(githubOwner = o, isSaved = false) }
+    fun updateGithubRepo(r: String)     { _uiState.value = _uiState.value.copy(githubRepo = r, isSaved = false) }
+    fun updateGithubBranch(b: String)   { _uiState.value = _uiState.value.copy(githubBranch = b, isSaved = false) }
+    fun updateProjectPath(p: String)    { _uiState.value = _uiState.value.copy(projectPath = p, isSaved = false) }
 
     fun saveSettings() {
         viewModelScope.launch {
@@ -68,6 +71,7 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.saveGitHubOwner(s.githubOwner)
             settingsRepository.saveGitHubRepo(s.githubRepo)
             settingsRepository.saveGitHubBranch(s.githubBranch.ifBlank { "main" })
+            settingsRepository.saveProjectPath(s.projectPath)
             _uiState.value = _uiState.value.copy(isSaved = true)
         }
     }

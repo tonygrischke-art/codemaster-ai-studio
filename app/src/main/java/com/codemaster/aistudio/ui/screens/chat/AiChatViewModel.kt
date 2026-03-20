@@ -36,6 +36,7 @@ data class ChatUiState(
     val attachedFileContent: String? = null,
     val totalTokens: Int = 0,
     val error: String? = null,
+    val successMessage: String? = null,
     val currentPersona: AiPersona = AI_PERSONAS.first(),
     val showPersonaPicker: Boolean = false,
     val projectContext: String? = null,
@@ -65,11 +66,11 @@ class AiChatViewModel @Inject constructor(
             val personaId = settingsRepository.getPersonaId()
             val persona = AI_PERSONAS.find { it.id == personaId } ?: AI_PERSONAS.first()
             _uiState.value = _uiState.value.copy(currentPersona = persona)
-            val project = projectRepository.getProjectById(projectId)
-            project?.let {
-                projectPath = it.path
-                loadProjectContext(it.path)
-            }
+
+            // Use proper path resolution
+            projectPath = projectRepository.getProjectPath(projectId)
+            if (projectPath.isNotBlank()) loadProjectContext(projectPath)
+
             chatRepository.getMessagesForProject(projectId)
                 .catch { }
                 .collect { messages ->
@@ -106,7 +107,7 @@ class AiChatViewModel @Inject constructor(
                     sb.appendLine("$indent $rel/")
                     sb.append(buildFileTree(root, file, depth + 1))
                 } else {
-                    val size = if (file.length() < 1024) "${file.length()}B" else "${file.length()/1024}KB"
+                    val size = if (file.length() < 1024) "${file.length()}B" else "${file.length() / 1024}KB"
                     sb.appendLine("$indent $rel ($size)")
                 }
             }
@@ -114,15 +115,18 @@ class AiChatViewModel @Inject constructor(
     }
 
     fun openFile(filePath: String) {
+        val fullPath = if (filePath.startsWith("/")) filePath
+                       else if (projectPath.isNotBlank()) "$projectPath/$filePath"
+                       else filePath
         viewModelScope.launch {
-            val existing = _uiState.value.openTabs.indexOfFirst { it.filePath == filePath }
+            val existing = _uiState.value.openTabs.indexOfFirst { it.filePath == fullPath }
             if (existing >= 0) {
                 _uiState.value = _uiState.value.copy(activeTabIndex = existing)
                 return@launch
             }
-            fsRepository.readFile(filePath).fold(
+            fsRepository.readFile(fullPath).fold(
                 onSuccess = { content ->
-                    val tab = OpenTab(fileName = File(filePath).name, filePath = filePath, content = content)
+                    val tab = OpenTab(fileName = File(fullPath).name, filePath = fullPath, content = content)
                     val tabs = _uiState.value.openTabs + tab
                     _uiState.value = _uiState.value.copy(openTabs = tabs, activeTabIndex = tabs.size - 1)
                 },
@@ -170,14 +174,11 @@ class AiChatViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(openTabs = tabs, activeTabIndex = newIdx)
     }
 
-    fun setActiveTab(index: Int) {
-        _uiState.value = _uiState.value.copy(activeTabIndex = index)
-    }
+    fun setActiveTab(index: Int) { _uiState.value = _uiState.value.copy(activeTabIndex = index) }
 
     fun explainCurrentFile() {
         val tab = _uiState.value.openTabs.getOrNull(_uiState.value.activeTabIndex) ?: run {
-            _uiState.value = _uiState.value.copy(error = "No file open to explain")
-            return
+            _uiState.value = _uiState.value.copy(error = "No file open to explain"); return
         }
         _uiState.value = _uiState.value.copy(
             inputText = "Explain what this file does and highlight any issues:",
@@ -191,7 +192,7 @@ class AiChatViewModel @Inject constructor(
         viewModelScope.launch {
             val savePath = if (projectPath.isNotBlank()) "$projectPath/$fileName" else "/sdcard/$fileName"
             fsRepository.writeFile(savePath, content).fold(
-                onSuccess = { _uiState.value = _uiState.value.copy(error = "Saved to $savePath") },
+                onSuccess = { _uiState.value = _uiState.value.copy(successMessage = "Saved to $savePath") },
                 onFailure = { _uiState.value = _uiState.value.copy(error = "Save failed: ${it.message}") }
             )
         }
@@ -211,6 +212,8 @@ class AiChatViewModel @Inject constructor(
     fun clearAttachment() { _uiState.value = _uiState.value.copy(attachedFileName = null, attachedFileContent = null) }
     fun showPersonaPicker() { _uiState.value = _uiState.value.copy(showPersonaPicker = true) }
     fun hidePersonaPicker() { _uiState.value = _uiState.value.copy(showPersonaPicker = false) }
+    fun clearError() { _uiState.value = _uiState.value.copy(error = null) }
+    fun clearSuccess() { _uiState.value = _uiState.value.copy(successMessage = null) }
 
     fun selectPersona(persona: AiPersona) {
         viewModelScope.launch {
@@ -230,10 +233,13 @@ class AiChatViewModel @Inject constructor(
         val text = state.inputText.trim()
         if (text.isBlank() && state.attachedFileContent == null) return
         if (state.isLoading) return
+
         val attachedName = state.attachedFileName
-        val displayText = if (attachedName != null) (text + "\n" + (attachedName ?: "")) else text
+        val displayText = if (attachedName != null) "$text\n $attachedName" else text
+
         val projectContextSection = state.projectContext?.let { "\n\nProject file tree:\n$it" } ?: ""
         val enrichedSystemPrompt = state.currentPersona.systemPrompt + projectContextSection
+
         viewModelScope.launch {
             val userMessage = ChatMessage(
                 projectId = currentProjectId, role = "user",
@@ -243,6 +249,7 @@ class AiChatViewModel @Inject constructor(
             )
             chatRepository.saveMessage(userMessage)
             _uiState.value = state.copy(inputText = "", isLoading = true, attachedFileName = null, attachedFileContent = null)
+
             val result = aiRepository.sendMessage(
                 history = _uiState.value.messages.dropLast(1),
                 userMessage = text,
@@ -263,5 +270,4 @@ class AiChatViewModel @Inject constructor(
     }
 
     fun clearHistory() { viewModelScope.launch { chatRepository.clearMessagesForProject(currentProjectId) } }
-    fun clearError() { _uiState.value = _uiState.value.copy(error = null) }
 }

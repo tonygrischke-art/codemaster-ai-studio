@@ -11,21 +11,21 @@ import com.codemaster.aistudio.ui.screens.chat.AiChatScreen
 import com.codemaster.aistudio.ui.screens.editor.CodeEditorScreen
 import com.codemaster.aistudio.ui.screens.git.GitScreen
 import com.codemaster.aistudio.ui.screens.home.HomeScreen
+import com.codemaster.aistudio.ui.screens.preview.PreviewScreen
 import com.codemaster.aistudio.ui.screens.settings.SettingsScreen
 import com.codemaster.aistudio.ui.screens.snippets.SnippetScreen
 import com.codemaster.aistudio.ui.screens.terminal.TerminalScreen
-import com.codemaster.aistudio.ui.screens.preview.PreviewScreen
 
 sealed class Screen(val route: String) {
     object Home     : Screen("home")
     object Settings : Screen("settings")
     object Snippets : Screen("snippets")
-    object Chat     : Screen("chat/{projectId}")     { fun createRoute(id: Long = -1L) = "chat/$id" }
+    object Chat     : Screen("chat/{projectId}")          { fun createRoute(id: Long = -1L) = "chat/$id" }
     object Editor   : Screen("editor/{projectId}/{fileId}") { fun createRoute(pid: Long, fid: Long = -1L) = "editor/$pid/$fid" }
-    object Build    : Screen("build/{projectId}")    { fun createRoute(id: Long = -1L) = "build/$id" }
-    object Terminal : Screen("terminal/{projectId}") { fun createRoute(id: Long = -1L) = "terminal/$id" }
-    object Git      : Screen("git/{projectId}")      { fun createRoute(id: Long = -1L) = "git/$id" }
-    object Preview  : Screen("preview/{projectId}")
+    object Build    : Screen("build/{projectId}")         { fun createRoute(id: Long = -1L) = "build/$id" }
+    object Terminal : Screen("terminal/{projectId}")      { fun createRoute(id: Long = -1L) = "terminal/$id" }
+    object Git      : Screen("git/{projectId}")           { fun createRoute(id: Long = -1L) = "git/$id" }
+    object Preview  : Screen("preview/{projectId}")       { fun createRoute(id: Long = -1L) = "preview/$id" }
 }
 
 @Composable
@@ -48,41 +48,78 @@ fun NavGraph(navController: NavHostController) {
             SnippetScreen(onBack = { navController.popBackStack() })
         }
 
-        composable(Screen.Chat.route, arguments = listOf(navArgument("projectId") { type = NavType.LongType; defaultValue = -1L })) { back ->
-            AiChatScreen(projectId = back.arguments?.getLong("projectId") ?: -1L, onBack = { navController.popBackStack() })
+        composable(
+            Screen.Chat.route,
+            arguments = listOf(navArgument("projectId") { type = NavType.LongType; defaultValue = -1L })
+        ) { back ->
+            AiChatScreen(
+                projectId = back.arguments?.getLong("projectId") ?: -1L,
+                onBack = { navController.popBackStack() }
+            )
         }
 
-        composable(Screen.Editor.route, arguments = listOf(
-            navArgument("projectId") { type = NavType.LongType },
-            navArgument("fileId")    { type = NavType.LongType; defaultValue = -1L }
-        )) { back ->
+        composable(
+            Screen.Editor.route,
+            arguments = listOf(
+                navArgument("projectId") { type = NavType.LongType },
+                navArgument("fileId")    { type = NavType.LongType; defaultValue = -1L }
+            )
+        ) { back ->
             CodeEditorScreen(
-                projectId = back.arguments?.getLong("projectId") ?: -1L,
-                fileId    = back.arguments?.getLong("fileId") ?: -1L,
+                projectId      = back.arguments?.getLong("projectId") ?: -1L,
+                fileId         = back.arguments?.getLong("fileId") ?: -1L,
                 onBack         = { navController.popBackStack() },
                 onOpenChat     = { navController.navigate(Screen.Chat.createRoute(it)) },
                 onOpenTerminal = { navController.navigate(Screen.Terminal.createRoute(it)) }
             )
         }
 
-        composable(Screen.Build.route, arguments = listOf(navArgument("projectId") { type = NavType.LongType; defaultValue = -1L })) { back ->
+        composable(
+            Screen.Build.route,
+            arguments = listOf(navArgument("projectId") { type = NavType.LongType; defaultValue = -1L })
+        ) { back ->
+            val projectId = back.arguments?.getLong("projectId") ?: -1L
             BuildScreen(
-                projectId      = back.arguments?.getLong("projectId") ?: -1L,
+                projectId      = projectId,
                 onBack         = { navController.popBackStack() },
-                onGoToSettings = { navController.navigate(Screen.Settings.route) }
+                onGoToSettings = { navController.navigate(Screen.Settings.route) },
+                onSendErrorToAi = { error ->
+                    navController.navigate(Screen.Chat.createRoute(projectId))
+                }
             )
         }
 
-        composable(Screen.Terminal.route, arguments = listOf(navArgument("projectId") { type = NavType.LongType; defaultValue = -1L })) { back ->
-            TerminalScreen(projectId = back.arguments?.getLong("projectId") ?: -1L, onBack = { navController.popBackStack() })
+        composable(
+            Screen.Terminal.route,
+            arguments = listOf(navArgument("projectId") { type = NavType.LongType; defaultValue = -1L })
+        ) { back ->
+            TerminalScreen(
+                projectId = back.arguments?.getLong("projectId") ?: -1L,
+                onBack = { navController.popBackStack() }
+            )
         }
 
-        composable(Screen.Git.route, arguments = listOf(navArgument("projectId") { type = NavType.LongType; defaultValue = -1L })) { back ->
-            GitScreen(projectId = back.arguments?.getLong("projectId") ?: -1L, onBack = { navController.popBackStack() })
+        composable(
+            Screen.Git.route,
+            arguments = listOf(navArgument("projectId") { type = NavType.LongType; defaultValue = -1L })
+        ) { back ->
+            GitScreen(
+                projectId = back.arguments?.getLong("projectId") ?: -1L,
+                onBack = { navController.popBackStack() }
+            )
         }
 
         composable(Screen.Settings.route) {
             SettingsScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(
+            Screen.Preview.route,
+            arguments = listOf(navArgument("projectId") { type = NavType.LongType; defaultValue = -1L })
+        ) { back ->
+            // PreviewScreen needs fileName + content passed via SavedStateHandle
+            // For now navigate back if no content
+            navController.popBackStack()
         }
     }
 }

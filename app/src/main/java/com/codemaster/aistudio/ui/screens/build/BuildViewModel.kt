@@ -47,15 +47,13 @@ class BuildViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(BuildUiState())
     val uiState: StateFlow<BuildUiState> = _uiState.asStateFlow()
-    private var currentProjectId: Long = -1L
 
     fun init(projectId: Long) {
-        currentProjectId = projectId
         loadConfig()
         refreshStatus()
         viewModelScope.launch {
-            val project = projectRepository.getProjectById(projectId)
-            val path = project?.path ?: ""
+            // Use proper path resolution
+            val path = projectRepository.getProjectPath(projectId)
             _uiState.value = _uiState.value.copy(projectPath = path)
         }
     }
@@ -68,13 +66,11 @@ class BuildViewModel @Inject constructor(
             val branch = settingsRepository.getGitHubBranch()
             _uiState.value = _uiState.value.copy(
                 isConfigured = token.isNotBlank() && owner.isNotBlank() && repo.isNotBlank(),
-                owner = owner, repo = repo,
-                branch = branch.ifBlank { "main" }
+                owner = owner, repo = repo, branch = branch.ifBlank { "main" }
             )
         }
     }
 
-    // ── GitHub Actions build ─────────────────────────────────
     fun triggerBuild() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isTriggering = true, triggerMessage = null)
@@ -88,92 +84,65 @@ class BuildViewModel @Inject constructor(
                     refreshStatus()
                 },
                 onFailure = { e ->
-                    _uiState.value = _uiState.value.copy(isTriggering = false, triggerMessage = "❌ ${e.message}")
+                    _uiState.value = _uiState.value.copy(isTriggering = false, triggerMessage = "FAIL ${e.message}")
                     addLog("ERROR: ${e.message}")
                 }
             )
         }
     }
 
-    // ── Local Termux build ───────────────────────────────────
     fun triggerLocalBuild() {
         val projectPath = _uiState.value.projectPath
         if (projectPath.isBlank()) {
-            addLog("❌ No project path set. Load a project first.")
+            addLog("No project path set. Load a project first.")
             return
         }
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isLocalBuilding = true, buildErrors = emptyList(),
-                apkPath = null, errorForAi = null
-            )
-            addLog("🔨 Starting local Termux build...")
-            addLog("📁 Project: $projectPath")
-
+            _uiState.value = _uiState.value.copy(isLocalBuilding = true, buildErrors = emptyList(), apkPath = null, errorForAi = null)
+            addLog("Starting local build...")
+            addLog("Project: $projectPath")
             withContext(Dispatchers.IO) {
                 try {
                     val gradlew = File(projectPath, "gradlew")
                     if (!gradlew.exists()) {
-                        addLog("❌ gradlew not found in $projectPath")
+                        addLog("gradlew not found in $projectPath")
                         _uiState.value = _uiState.value.copy(isLocalBuilding = false)
                         return@withContext
                     }
-
-                    // Make gradlew executable
                     gradlew.setExecutable(true)
-
-                    val process = ProcessBuilder(
-                        listOf("$projectPath/gradlew", "assembleDebug", "--stacktrace")
-                    )
-                        .directory(File(projectPath))
-                        .redirectErrorStream(true)
-                        .start()
-
+                    val process = ProcessBuilder(listOf("$projectPath/gradlew", "assembleDebug", "--stacktrace"))
+                        .directory(File(projectPath)).redirectErrorStream(true).start()
                     val errors = mutableListOf<String>()
                     BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
                         var line: String?
                         while (reader.readLine().also { line = it } != null) {
                             val l = line!!
                             addLog(l)
-                            if (l.contains("error:", ignoreCase = true) ||
-                                l.contains("FAILED", ignoreCase = true) ||
-                                l.contains("Exception")) {
+                            if (l.contains("error:", ignoreCase = true) || l.contains("FAILED") || l.contains("Exception")) {
                                 errors.add(l)
                             }
                         }
                     }
-
                     val exitCode = process.waitFor()
                     if (exitCode == 0) {
-                        addLog("✅ BUILD SUCCESSFUL")
-                        // Find APK
-                        val apk = findApk(projectPath)
+                        addLog("BUILD SUCCESSFUL")
+                        val apk = File(projectPath).walk().filter { it.extension == "apk" && it.name.contains("debug") }.maxByOrNull { it.lastModified() }
                         if (apk != null) {
-                            addLog("📦 APK ready: ${apk.name}")
+                            addLog("APK ready: ${apk.name}")
                             _uiState.value = _uiState.value.copy(apkPath = apk.absolutePath)
                         }
                     } else {
-                        addLog("❌ BUILD FAILED (exit $exitCode)")
+                        addLog("BUILD FAILED (exit $exitCode)")
                         val errorSummary = errors.takeLast(20).joinToString("\n")
-                        _uiState.value = _uiState.value.copy(
-                            buildErrors = errors,
-                            errorForAi = errorSummary
-                        )
+                        _uiState.value = _uiState.value.copy(buildErrors = errors, errorForAi = errorSummary)
                     }
                 } catch (e: Exception) {
-                    addLog("❌ Exception: ${e.message}")
-                    _uiState.value = _uiState.value.copy(buildErrors = listOf(e.message ?: "Unknown error"))
+                    addLog("Exception: ${e.message}")
                 } finally {
                     _uiState.value = _uiState.value.copy(isLocalBuilding = false)
                 }
             }
         }
-    }
-
-    private fun findApk(projectPath: String): File? {
-        return File(projectPath).walk()
-            .filter { it.extension == "apk" && it.name.contains("debug") }
-            .maxByOrNull { it.lastModified() }
     }
 
     fun installApk(apkPath: String) {
@@ -187,7 +156,7 @@ class BuildViewModel @Inject constructor(
             }
             context.startActivity(intent)
         } catch (e: Exception) {
-            addLog("❌ Install failed: ${e.message}")
+            addLog("Install failed: ${e.message}")
         }
     }
 
