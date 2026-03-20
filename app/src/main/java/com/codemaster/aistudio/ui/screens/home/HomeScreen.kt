@@ -75,7 +75,7 @@ fun HomeScreen(
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
                 uiState.isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                uiState.projects.isEmpty() -> Column(modifier = Modifier.fillMaxSize()) { QuickActionsBar(onBrowseFiles = { viewModel.showImportDialog() }, onOpenChat = { uiState.projects.firstOrNull()?.let { onOpenChat(it.id) } }); EmptyProjectsPlaceholder(modifier = Modifier.align(Alignment.Center)) }
+                uiState.projects.isEmpty() -> Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) { Spacer(Modifier.height(16.dp)); QuickActionsBar(onBrowseFiles = { viewModel.showImportDialog() }, onOpenChat = { uiState.projects.firstOrNull()?.let { onOpenChat(it.id) } }); Spacer(Modifier.weight(1f)); EmptyProjectsPlaceholder(); Spacer(Modifier.weight(1f)) }
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
