@@ -1,4 +1,8 @@
-package com.codemaster.aistudio.ui.screens.home
+import os
+
+path = "app/src/main/java/com/codemaster/aistudio/ui/screens/home/HomeViewModel.kt"
+
+content = r'''package com.codemaster.aistudio.ui.screens.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -242,3 +246,10 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch { projectRepository.deleteProject(project) }
     }
 }
+'''
+
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, 'w') as f:
+    f.write(content)
+print("Written successfully")
+print(f"Lines: {len(content.splitlines())}")
