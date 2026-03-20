@@ -119,10 +119,10 @@ Return ONLY valid JSON, no markdown, no explanation."""
                         File(projectPath).mkdirs()
 
                         // Extract files from JSON
-                        val filesMatch = Regex(""files"\s*:\s*\{(.+)\}", RegexOption.DOT_MATCHES_ALL).find(clean)
+                        val filesMatch = Regex(""files"\\s*:\\s*\\{(.+)\\}", RegexOption.DOT_MATCHES_ALL).find(clean)
                         filesMatch?.let { fm ->
                             val filesContent = fm.groupValues[1]
-                            val filePattern = Regex(""([^"]+)"\s*:\s*"((?:[^"\\]|\\.)*)"")
+                            val filePattern = Regex(""([^"]+)"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)")
                             filePattern.findAll(filesContent).forEach { fileMatch ->
                                 val fileName = fileMatch.groupValues[1]
                                 val fileContent = fileMatch.groupValues[2]
