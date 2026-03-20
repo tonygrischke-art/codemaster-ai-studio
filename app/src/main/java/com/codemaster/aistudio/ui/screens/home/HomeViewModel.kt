@@ -100,12 +100,16 @@ Return ONLY valid JSON, no markdown, no explanation."""
             result.fold(
                 onSuccess = { response ->
                     try {
-                        // Parse the JSON response
-                        val clean = response.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
-                        val nameMatch = Regex(""projectName"\s*:\s*"([^"]+)"").find(clean)
-                        val descMatch = Regex(""description"\s*:\s*"([^"]+)"").find(clean)
-                        val projectName = nameMatch?.groupValues?.get(1) ?: "AI Generated App"
-                        val description = descMatch?.groupValues?.get(1) ?: state.aiBuilderPrompt
+                        val clean = response.trim()
+                            .removePrefix("```json").removePrefix("```")
+                            .removeSuffix("```").trim()
+                        // Simple extraction without complex regex
+                        val projectName = clean.substringAfter("\"projectName\":")
+                            .substringAfter("\"").substringBefore("\"")
+                            .ifBlank { "AI-App-${System.currentTimeMillis()}" }
+                        val description = clean.substringAfter("\"description\":")
+                            .substringAfter("\"").substringBefore("\"")
+                            .ifBlank { state.aiBuilderPrompt }
 
                         // Create project
                         val id = projectRepository.createProject(projectName, state.aiBuilderLanguage, description)
