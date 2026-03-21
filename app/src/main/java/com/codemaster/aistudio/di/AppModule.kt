@@ -61,7 +61,7 @@ object AppModule {
 
     @Provides @Singleton @Named("groq")
     fun provideGroqRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
-        .baseUrl("https://api.groq.com/openai/").client(client)
+        .baseUrl("https://api.groq.com/").client(client)
         .addConverterFactory(GsonConverterFactory.create()).build()
 
     @Provides @Singleton @Named("github")
