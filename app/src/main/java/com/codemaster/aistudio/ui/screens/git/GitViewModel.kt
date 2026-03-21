@@ -47,14 +47,14 @@ class GitViewModel @Inject constructor(
         val path = _uiState.value.projectPath
         if (path.isBlank()) return
         viewModelScope.launch {
-            val branch = runGit(path, listOf("git", "branch", "--show-current")).trim()
-            val status = runGit(path, listOf("git", "status", "--short"))
+            val branch = runGit(path, listOf("/data/data/com.termux/files/usr/bin/git", "branch", "--show-current")).trim()
+            val status = runGit(path, listOf("/data/data/com.termux/files/usr/bin/git", "status", "--short"))
             _uiState.value = _uiState.value.copy(currentBranch = branch, status = status.ifBlank { "Working tree clean" })
         }
     }
 
     fun stageAll() {
-        runGitCommand(listOf("git", "add", "-A"), "Staged all changes")
+        runGitCommand(listOf("/data/data/com.termux/files/usr/bin/git", "add", "-A"), "Staged all changes")
     }
 
     fun commitAndPush(message: String) {
@@ -63,12 +63,12 @@ class GitViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             addLog("Staging all changes...")
-            runGit(path, listOf("git", "add", "-A"))
+            runGit(path, listOf("/data/data/com.termux/files/usr/bin/git", "add", "-A"))
             addLog("Committing: $message")
-            val commitOut = runGit(path, listOf("git", "commit", "-m", message))
+            val commitOut = runGit(path, listOf("/data/data/com.termux/files/usr/bin/git", "commit", "-m", message))
             addLog(commitOut.trim())
             addLog("Pushing to origin...")
-            val pushOut = runGit(path, listOf("git", "push", "origin", "HEAD"))
+            val pushOut = runGit(path, listOf("/data/data/com.termux/files/usr/bin/git", "push", "origin", "HEAD"))
             addLog(pushOut.trim())
             addLog("Done!")
             _uiState.value = _uiState.value.copy(isLoading = false)
@@ -76,8 +76,8 @@ class GitViewModel @Inject constructor(
         }
     }
 
-    fun push() = runGitCommand(listOf("git", "push", "origin", "HEAD"), "Pushing...")
-    fun pull() = runGitCommand(listOf("git", "pull"), "Pulling...")
+    fun push() = runGitCommand(listOf("/data/data/com.termux/files/usr/bin/git", "push", "origin", "HEAD"), "Pushing...")
+    fun pull() = runGitCommand(listOf("/data/data/com.termux/files/usr/bin/git", "pull"), "Pulling...")
 
     private fun runGitCommand(cmd: List<String>, label: String) {
         val path = _uiState.value.projectPath

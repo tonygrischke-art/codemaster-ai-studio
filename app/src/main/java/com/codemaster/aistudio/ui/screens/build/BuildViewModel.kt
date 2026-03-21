@@ -104,6 +104,7 @@ class BuildViewModel @Inject constructor(
             withContext(Dispatchers.IO) {
                 try {
                     val gradlew = File(projectPath, "gradlew")
+                    val termuxGit = "/data/data/com.termux/files/usr/bin/git"
                     if (!gradlew.exists()) {
                         addLog("gradlew not found in $projectPath")
                         _uiState.value = _uiState.value.copy(isLocalBuilding = false)
