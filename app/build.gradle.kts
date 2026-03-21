@@ -117,6 +117,16 @@ dependencies {
     // Splash Screen
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.webkit:webkit:1.9.0")
+    // Kotlin serialization for better JSON handling
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    // Coil for image loading
+    implementation("io.coil-kt:coil-compose:2.6.0")
+    // WorkManager for background tasks
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    // Security crypto for encrypted key storage
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    // Zip support for project export
+    implementation("org.apache.commons:commons-compress:1.26.1")
 
     // Testing
     testImplementation("junit:junit:4.13.2")
