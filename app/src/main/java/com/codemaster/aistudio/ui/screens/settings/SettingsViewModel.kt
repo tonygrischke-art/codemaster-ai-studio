@@ -12,6 +12,8 @@ import javax.inject.Inject
 
 data class SettingsUiState(
     val apiKey: String = "",
+    val claudeApiKey: String = "",
+    val kimiApiKey: String = "",
     val model: String = "llama-3.3-70b-versatile",
     val isDarkTheme: Boolean = true,
     val githubToken: String = "",
@@ -19,6 +21,8 @@ data class SettingsUiState(
     val githubRepo: String = "",
     val githubBranch: String = "main",
     val projectPath: String = "/sdcard/codemaster-ai-studio",
+    val onboardingComplete: Boolean = false,
+    val totalTokensUsed: Long = 0L,
     val isSaved: Boolean = false
 )
 
@@ -40,31 +44,47 @@ class SettingsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             _uiState.value = SettingsUiState(
-                apiKey       = settingsRepository.getApiKey(),
-                model        = settingsRepository.getModel(),
-                isDarkTheme  = settingsRepository.getDarkTheme(),
-                githubToken  = settingsRepository.getGitHubToken(),
-                githubOwner  = settingsRepository.getGitHubOwner(),
-                githubRepo   = settingsRepository.getGitHubRepo(),
-                githubBranch = settingsRepository.getGitHubBranch().ifBlank { "main" },
-                projectPath  = settingsRepository.getProjectPath().ifBlank { "/sdcard/codemaster-ai-studio" }
+                apiKey             = settingsRepository.getApiKey(),
+                claudeApiKey       = settingsRepository.getClaudeApiKey(),
+                kimiApiKey         = settingsRepository.getKimiApiKey(),
+                model              = settingsRepository.getModel(),
+                isDarkTheme        = settingsRepository.getDarkTheme(),
+                githubToken        = settingsRepository.getGitHubToken(),
+                githubOwner        = settingsRepository.getGitHubOwner(),
+                githubRepo         = settingsRepository.getGitHubRepo(),
+                githubBranch       = settingsRepository.getGitHubBranch().ifBlank { "main" },
+                projectPath        = settingsRepository.getProjectPath().ifBlank { "/sdcard/codemaster-ai-studio" },
+                onboardingComplete = settingsRepository.getOnboardingComplete(),
+                totalTokensUsed    = settingsRepository.getTotalTokensUsed()
             )
         }
     }
 
-    fun updateApiKey(k: String)         { _uiState.value = _uiState.value.copy(apiKey = k, isSaved = false) }
-    fun updateModel(m: String)          { _uiState.value = _uiState.value.copy(model = m, isSaved = false) }
-    fun toggleTheme()                   { _uiState.value = _uiState.value.copy(isDarkTheme = !_uiState.value.isDarkTheme, isSaved = false) }
-    fun updateGithubToken(t: String)    { _uiState.value = _uiState.value.copy(githubToken = t, isSaved = false) }
-    fun updateGithubOwner(o: String)    { _uiState.value = _uiState.value.copy(githubOwner = o, isSaved = false) }
-    fun updateGithubRepo(r: String)     { _uiState.value = _uiState.value.copy(githubRepo = r, isSaved = false) }
-    fun updateGithubBranch(b: String)   { _uiState.value = _uiState.value.copy(githubBranch = b, isSaved = false) }
-    fun updateProjectPath(p: String)    { _uiState.value = _uiState.value.copy(projectPath = p, isSaved = false) }
+    fun updateApiKey(k: String)        { _uiState.value = _uiState.value.copy(apiKey = k, isSaved = false) }
+    fun updateClaudeApiKey(k: String)  { _uiState.value = _uiState.value.copy(claudeApiKey = k, isSaved = false) }
+    fun updateKimiApiKey(k: String)    { _uiState.value = _uiState.value.copy(kimiApiKey = k, isSaved = false) }
+    fun updateModel(m: String)         { _uiState.value = _uiState.value.copy(model = m, isSaved = false) }
+    fun toggleTheme()                  { _uiState.value = _uiState.value.copy(isDarkTheme = !_uiState.value.isDarkTheme, isSaved = false) }
+    fun updateGithubToken(t: String)   { _uiState.value = _uiState.value.copy(githubToken = t, isSaved = false) }
+    fun updateGithubOwner(o: String)   { _uiState.value = _uiState.value.copy(githubOwner = o, isSaved = false) }
+    fun updateGithubRepo(r: String)    { _uiState.value = _uiState.value.copy(githubRepo = r, isSaved = false) }
+    fun updateGithubBranch(b: String)  { _uiState.value = _uiState.value.copy(githubBranch = b, isSaved = false) }
+    fun updateProjectPath(p: String)   { _uiState.value = _uiState.value.copy(projectPath = p, isSaved = false) }
+
+    fun completeOnboarding() {
+        viewModelScope.launch {
+            settingsRepository.saveOnboardingComplete(true)
+            _uiState.value = _uiState.value.copy(onboardingComplete = true)
+            saveSettings()
+        }
+    }
 
     fun saveSettings() {
         viewModelScope.launch {
             val s = _uiState.value
             settingsRepository.saveApiKey(s.apiKey)
+            settingsRepository.saveClaudeApiKey(s.claudeApiKey)
+            settingsRepository.saveKimiApiKey(s.kimiApiKey)
             settingsRepository.saveModel(s.model)
             settingsRepository.saveDarkTheme(s.isDarkTheme)
             settingsRepository.saveGitHubToken(s.githubToken)

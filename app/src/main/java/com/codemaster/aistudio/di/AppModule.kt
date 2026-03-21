@@ -6,8 +6,10 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import com.codemaster.aistudio.data.CodeMasterDatabase
+import com.codemaster.aistudio.data.api.ClaudeApiService
 import com.codemaster.aistudio.data.api.GitHubApiService
 import com.codemaster.aistudio.data.api.GroqApiService
+import com.codemaster.aistudio.data.api.KimiApiService
 import com.codemaster.aistudio.data.dao.ChatMessageDao
 import com.codemaster.aistudio.data.dao.CodeFileDao
 import com.codemaster.aistudio.data.dao.ProjectDao
@@ -52,16 +54,29 @@ object AppModule {
     @Provides @Singleton
     fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
         .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC })
-        .connectTimeout(30, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .build()
 
     @Provides @Singleton @Named("groq")
     fun provideGroqRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
-        .baseUrl("https://api.groq.com/").client(client)
+        .baseUrl("https://api.groq.com/openai/").client(client)
         .addConverterFactory(GsonConverterFactory.create()).build()
 
     @Provides @Singleton @Named("github")
     fun provideGitHubRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
         .baseUrl("https://api.github.com/").client(client)
+        .addConverterFactory(GsonConverterFactory.create()).build()
+
+    @Provides @Singleton @Named("claude")
+    fun provideClaudeRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
+        .baseUrl("https://api.anthropic.com/").client(client)
+        .addConverterFactory(GsonConverterFactory.create()).build()
+
+    @Provides @Singleton @Named("kimi")
+    fun provideKimiRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
+        .baseUrl("https://api.moonshot.cn/").client(client)
         .addConverterFactory(GsonConverterFactory.create()).build()
 
     @Provides @Singleton
@@ -71,4 +86,12 @@ object AppModule {
     @Provides @Singleton
     fun provideGitHubApiService(@Named("github") retrofit: Retrofit): GitHubApiService =
         retrofit.create(GitHubApiService::class.java)
+
+    @Provides @Singleton
+    fun provideClaudeApiService(@Named("claude") retrofit: Retrofit): ClaudeApiService =
+        retrofit.create(ClaudeApiService::class.java)
+
+    @Provides @Singleton
+    fun provideKimiApiService(@Named("kimi") retrofit: Retrofit): KimiApiService =
+        retrofit.create(KimiApiService::class.java)
 }
