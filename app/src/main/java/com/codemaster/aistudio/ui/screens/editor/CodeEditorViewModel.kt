@@ -308,7 +308,7 @@ class CodeEditorViewModel @Inject constructor(
         } else {
             state.files.filter { file ->
                 val parentPath = file.path.substringBeforeLast("/")
-                parentPath == root || parentPath in state.expandedDirs || state.expandedDirs.any { file.path.startsWith(it + "/") && file.depth == 1 }
+                parentPath == root || parentPath in state.expandedDirs
             }
         }
     }
