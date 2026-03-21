@@ -124,7 +124,7 @@ class HomeViewModel @Inject constructor(
                             ?.ifBlank { state.aiBuilderPrompt } ?: state.aiBuilderPrompt
 
                         // Create project directory on sdcard
-                        val projectPath = "/sdcard/$projectName"
+                        val projectPath = "/data/data/com.termux/files/home/$projectName"
                         File(projectPath).mkdirs()
 
                         // Parse and write each file using simple state machine

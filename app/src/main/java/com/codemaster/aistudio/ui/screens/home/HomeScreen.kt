@@ -61,7 +61,7 @@ fun HomeScreen(
                 // AI App Builder FAB
                 SmallFloatingActionButton(
                     onClick = { viewModel.showAiBuilder() },
-                    containerColor = MaterialTheme.colorScheme.tertiary
+                    containerColor = MaterialTheme.colorScheme.primary
                 ) {
                     Icon(Icons.Default.AutoAwesome, "AI Build", tint = MaterialTheme.colorScheme.onTertiary)
                 }
@@ -208,7 +208,7 @@ fun QuickActionsBar(
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.tertiary
+                containerColor = MaterialTheme.colorScheme.primary
             )
         ) {
             Icon(Icons.Default.Build, null, modifier = Modifier.size(18.dp))
