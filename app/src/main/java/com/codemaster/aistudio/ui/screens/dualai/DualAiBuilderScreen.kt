@@ -153,7 +153,7 @@ fun DualAiBuilderScreen(
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
-                    Row(modifier = Modifier.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Row(modifier = Modifier.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Session tokens", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("${uiState.totalTokensUsed}", fontWeight = FontWeight.Bold)
                         Text(uiState.estimatedCost, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
