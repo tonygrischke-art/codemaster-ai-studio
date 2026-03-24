@@ -1,5 +1,6 @@
 package com.codemaster.aistudio.ui.screens.dualai
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.codemaster.aistudio.data.repository.DualAiProgress
@@ -7,6 +8,7 @@ import com.codemaster.aistudio.data.repository.DualAiRepository
 import com.codemaster.aistudio.data.repository.ProjectRepository
 import com.codemaster.aistudio.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,7 +35,8 @@ data class DualAiBuilderUiState(
 class DualAiBuilderViewModel @Inject constructor(
     private val dualAiRepository: DualAiRepository,
     private val projectRepository: ProjectRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DualAiBuilderUiState())
@@ -58,12 +61,14 @@ class DualAiBuilderViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isBuilding = true, isComplete = false, error = null)
 
-            // Determine output path
+            // Determine output path - use app's files directory as base
             val projectName = state.userDescription.take(30)
                 .replace(Regex("[^a-zA-Z0-9 ]"), "")
                 .trim().replace(" ", "-")
                 .ifBlank { "AI-App" }
-            val outputPath = android.os.Environment.getExternalStorageDirectory().absolutePath + "/$projectName"
+            val baseDir = context.getExternalFilesDir(null)?.absolutePath
+                ?: File("/sdcard/Documents").apply { mkdirs() }.absolutePath
+            val outputPath = "$baseDir/$projectName"
 
             dualAiRepository.buildApp(
                 userDescription = state.userDescription,

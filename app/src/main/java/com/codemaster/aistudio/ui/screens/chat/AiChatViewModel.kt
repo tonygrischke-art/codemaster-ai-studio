@@ -1,6 +1,5 @@
 package com.codemaster.aistudio.ui.screens.chat
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.codemaster.aistudio.data.model.AiPersona
 import com.codemaster.aistudio.data.model.AI_PERSONAS
@@ -10,6 +9,7 @@ import com.codemaster.aistudio.data.repository.ChatRepository
 import com.codemaster.aistudio.data.repository.FileSystemRepository
 import com.codemaster.aistudio.data.repository.ProjectRepository
 import com.codemaster.aistudio.data.repository.SettingsRepository
+import com.codemaster.aistudio.ui.base.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -52,12 +52,16 @@ class AiChatViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val fsRepository: FileSystemRepository,
     private val projectRepository: ProjectRepository
-) : ViewModel() {
+) : BaseViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
     private var currentProjectId: Long = -1L
     private var projectPath: String = ""
+
+    override fun handleException(throwable: Throwable) {
+        _uiState.value = _uiState.value.copy(error = throwable.message, isLoading = false)
+    }
     private var autoSaveJobs = mutableMapOf<Int, Job>()
 
     fun init(projectId: Long) {
@@ -248,10 +252,11 @@ class AiChatViewModel @Inject constructor(
                 attachedFileName = attachedName
             )
             chatRepository.saveMessage(userMessage)
+            val updatedMessages = state.messages + userMessage
             _uiState.value = state.copy(inputText = "", isLoading = true, attachedFileName = null, attachedFileContent = null)
 
             val result = aiRepository.sendMessage(
-                history = _uiState.value.messages.dropLast(1),
+                history = updatedMessages,
                 userMessage = text,
                 attachedFileContent = state.attachedFileContent,
                 systemPrompt = enrichedSystemPrompt

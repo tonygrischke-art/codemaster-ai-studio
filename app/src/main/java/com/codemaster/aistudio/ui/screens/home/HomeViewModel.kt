@@ -1,12 +1,13 @@
 package com.codemaster.aistudio.ui.screens.home
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.codemaster.aistudio.data.model.Project
 import com.codemaster.aistudio.data.repository.AiRepository
 import com.codemaster.aistudio.data.repository.FileSystemRepository
 import com.codemaster.aistudio.data.repository.ProjectRepository
 import com.codemaster.aistudio.data.repository.SettingsRepository
+import com.codemaster.aistudio.data.util.PlatformHelper
+import com.codemaster.aistudio.ui.base.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,11 +40,16 @@ class HomeViewModel @Inject constructor(
     private val projectRepository: ProjectRepository,
     private val fsRepository: FileSystemRepository,
     private val aiRepository: AiRepository,
-    private val settingsRepository: SettingsRepository
-) : ViewModel() {
+    private val settingsRepository: SettingsRepository,
+    private val platformHelper: PlatformHelper
+) : BaseViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+    override fun handleException(throwable: Throwable) {
+        _uiState.value = _uiState.value.copy(error = throwable.message)
+    }
 
     init {
         viewModelScope.launch {
@@ -123,9 +129,8 @@ class HomeViewModel @Inject constructor(
                             ?.removePrefix("DESC:")?.trim()
                             ?.ifBlank { state.aiBuilderPrompt } ?: state.aiBuilderPrompt
 
-                        // Create project directory on sdcard
-                        val projectPath = "/data/data/com.termux/files/home/$projectName"
-                        File(projectPath).mkdirs()
+                        // Create project directory using PlatformHelper
+                        val projectPath = platformHelper.createProjectDirectory(projectName)
 
                         // Parse and write each file using simple state machine
                         var currentFileName = ""

@@ -3,6 +3,7 @@ package com.codemaster.aistudio.ui.screens.terminal
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.codemaster.aistudio.data.util.PlatformHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -33,7 +34,8 @@ data class TerminalUiState(
 
 @HiltViewModel
 class TerminalViewModel @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val platformHelper: PlatformHelper
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TerminalUiState())
@@ -45,27 +47,17 @@ class TerminalViewModel @Inject constructor(
     private val maxLines = 2000
 
     private val isTermuxAvailable: Boolean
-        get() = File("/data/data/com.termux/files/usr/bin/bash").exists()
+        get() = platformHelper.isTermuxAvailable
 
     // Build the best available shell command - NO --login on system sh
     private fun buildShellCommand(): List<String> {
-        return when {
-            File("/data/data/com.termux/files/usr/bin/bash").exists() ->
-                listOf("/data/data/com.termux/files/usr/bin/bash", "--login")
-            File("/data/data/com.termux/files/usr/bin/sh").exists() ->
-                listOf("/data/data/com.termux/files/usr/bin/sh")
-            File("/system/bin/sh").exists() ->
-                listOf("/system/bin/sh")   // NO --login, Android sh doesn't support it
-            else ->
-                listOf("/system/xbin/sh")
-        }
+        return platformHelper.bashBinary?.let { bash ->
+            if (bash.endsWith("bash")) listOf(bash, "--login") else listOf(bash)
+        } ?: listOf("/system/bin/sh")
     }
 
     fun init(projectId: Long) {
-        val homeDir = if (isTermuxAvailable)
-            "/data/data/com.termux/files/home"
-        else
-            context.filesDir.absolutePath
+        val homeDir = platformHelper.homeDirectory
 
         val shellCmd = buildShellCommand()
         appendLine(TerminalLine("=== CodeMaster AI Studio Terminal ===", LineType.SYSTEM))
@@ -86,17 +78,7 @@ class TerminalViewModel @Inject constructor(
                 val pb = ProcessBuilder(shellCmd).apply {
                     directory(File(startDir).takeIf { it.exists() } ?: context.filesDir)
                     environment().apply {
-                        if (isTermuxAvailable) {
-                            put("HOME", "/data/data/com.termux/files/home")
-                            put("PATH", "/data/data/com.termux/files/usr/bin:/system/bin:/system/xbin")
-                            put("LD_LIBRARY_PATH", "/data/data/com.termux/files/usr/lib")
-                            put("PREFIX", "/data/data/com.termux/files/usr")
-                            put("TMPDIR", "/data/data/com.termux/files/usr/tmp")
-                        } else {
-                            put("PATH", "/system/bin:/system/xbin")
-                            put("HOME", context.filesDir.absolutePath)
-                        }
-                        put("TERM", "xterm-256color")
+                        platformHelper.buildEnvironment().forEach { (k, v) -> put(k, v) }
                         put("LANG", "en_US.UTF-8")
                     }
                     redirectErrorStream(false)
@@ -221,9 +203,7 @@ class TerminalViewModel @Inject constructor(
                     }
                     "cd" -> {
                         val target = when {
-                            parts.size < 2 || parts[1] == "~" ->
-                                if (isTermuxAvailable) "/data/data/com.termux/files/home"
-                                else context.filesDir.absolutePath
+                            parts.size < 2 || parts[1] == "~" -> platformHelper.homeDirectory
                             parts[1].startsWith("/") -> parts[1]
                             else -> _uiState.value.cwd + "/" + parts[1]
                         }

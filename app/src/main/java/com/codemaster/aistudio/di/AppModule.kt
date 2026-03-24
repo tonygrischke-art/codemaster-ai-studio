@@ -14,6 +14,7 @@ import com.codemaster.aistudio.data.dao.ChatMessageDao
 import com.codemaster.aistudio.data.dao.CodeFileDao
 import com.codemaster.aistudio.data.dao.ProjectDao
 import com.codemaster.aistudio.data.dao.SnippetDao
+import com.codemaster.aistudio.data.migration.DatabaseMigrations
 import com.codemaster.aistudio.data.repository.FileSystemRepository
 import dagger.Module
 import dagger.Provides
@@ -37,7 +38,8 @@ object AppModule {
     @Provides @Singleton
     fun provideDatabase(@ApplicationContext context: Context): CodeMasterDatabase =
         Room.databaseBuilder(context, CodeMasterDatabase::class.java, "codemaster_db")
-            .fallbackToDestructiveMigration().build()
+            .addMigrations(DatabaseMigrations.MIGRATION_1_2, DatabaseMigrations.MIGRATION_2_3)
+            .build()
 
     @Provides @Singleton fun provideProjectDao(db: CodeMasterDatabase): ProjectDao = db.projectDao()
     @Provides @Singleton fun provideChatMessageDao(db: CodeMasterDatabase): ChatMessageDao = db.chatMessageDao()
@@ -53,7 +55,7 @@ object AppModule {
 
     @Provides @Singleton
     fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
-        .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC })
+        .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.NONE })
         .connectTimeout(60, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)

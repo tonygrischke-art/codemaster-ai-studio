@@ -1,6 +1,7 @@
 package com.codemaster.aistudio.data.repository
 
 import android.content.Context
+import com.codemaster.aistudio.data.util.PlatformHelper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -20,30 +21,12 @@ data class GitStatus(
 @Singleton
 class GitRepository @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val platformHelper: PlatformHelper
 ) {
-    private fun findGitBinary(): String? {
-        return listOf(
-            "/data/data/com.termux/files/usr/bin/git",
-            "/system/bin/git",
-            "/system/xbin/git"
-        ).firstOrNull { File(it).exists() }
-    }
+    private fun findGitBinary(): String? = platformHelper.gitBinary
 
-    private fun buildEnv(): Map<String, String> {
-        val env = mutableMapOf<String, String>()
-        if (File("/data/data/com.termux/files/usr/bin/git").exists()) {
-            env["HOME"] = "/data/data/com.termux/files/home"
-            env["PATH"] = "/data/data/com.termux/files/usr/bin:/system/bin"
-            env["LD_LIBRARY_PATH"] = "/data/data/com.termux/files/usr/lib"
-            env["GIT_EXEC_PATH"] = "/data/data/com.termux/files/usr/libexec/git-core"
-            env["GIT_TEMPLATE_DIR"] = "/data/data/com.termux/files/usr/share/git-core/templates"
-        } else {
-            env["HOME"] = context.filesDir.absolutePath
-            env["PATH"] = "/system/bin:/system/xbin"
-        }
-        return env
-    }
+    private fun buildEnv(): Map<String, String> = platformHelper.buildEnvironment()
 
     private suspend fun runGit(vararg args: String, workDir: String? = null): Result<String> =
         withContext(Dispatchers.IO) {
@@ -116,8 +99,18 @@ class GitRepository @Inject constructor(
         val repo  = settingsRepository.getGitHubRepo()
         if (token.isBlank() || owner.isBlank() || repo.isBlank())
             return Result.failure(Exception("Configure GitHub token, username, and repo in Settings first."))
-        val url = "https://$owner:$token@github.com/$owner/$repo.git"
-        return runGit("push", url, "HEAD", workDir = repoPath)
+        
+        // Configure credential cache for this session to avoid token in URL
+        val cacheTimeout = 300 // 5 minutes
+        runGit("config", "--global", "credential.helper", "cache --timeout=$cacheTimeout", workDir = repoPath)
+        
+        // Store credentials temporarily using git credential
+        val credentials = "username=$owner\npassword=$token"
+        val url = "https://github.com/$owner/$repo.git"
+        
+        // Configure remote with clean URL
+        runGit("remote", "set-url", "origin", url, workDir = repoPath)
+        return runGit("push", "origin", "HEAD", workDir = repoPath)
     }
 
     suspend fun pull(repoPath: String): Result<String> = runGit("pull", workDir = repoPath)

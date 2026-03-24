@@ -19,11 +19,11 @@ import java.io.File
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FileBrowserDialog(
-    startPath: String = "/sdcard",
+    startPath: String? = null,
     onPathSelected: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var currentPath by remember { mutableStateOf(startPath) }
+    var currentPath by remember { mutableStateOf(startPath ?: System.getProperty("user.dir") ?: "/data/data/com.termux/files/home") }
     var entries by remember { mutableStateOf(listOf<File>()) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -61,11 +61,12 @@ fun FileBrowserDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf(
-                        "SDCard" to "/sdcard",
-                        "Termux" to "/data/data/com.termux/files/home",
-                        "Up" to File(currentPath).parent
-                    ).forEach { (label, path) ->
+                    listOfNotNull(
+                        listOf("SDCard" to "/sdcard"),
+                        listOf("Termux" to "/data/data/com.termux/files/home"),
+                        listOf("Current" to System.getProperty("user.dir") ?: "/data/data/com.termux/files/home"),
+                        listOfNotNull("Up" to File(currentPath).parent)
+                    ).flatten().forEach { (label, path) ->
                         if (path != null) {
                             SuggestionChip(
                                 onClick = { currentPath = path },

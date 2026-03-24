@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.codemaster.aistudio.data.repository.ProjectRepository
 import com.codemaster.aistudio.data.repository.SettingsRepository
+import com.codemaster.aistudio.data.util.PlatformHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,8 +29,12 @@ data class GitUiState(
 @HiltViewModel
 class GitViewModel @Inject constructor(
     private val projectRepository: ProjectRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val platformHelper: PlatformHelper
 ) : ViewModel() {
+
+    private val gitBinary: String
+        get() = platformHelper.gitBinary ?: "/system/bin/git"
 
     private val _uiState = MutableStateFlow(GitUiState())
     val uiState: StateFlow<GitUiState> = _uiState.asStateFlow()
@@ -47,14 +52,14 @@ class GitViewModel @Inject constructor(
         val path = _uiState.value.projectPath
         if (path.isBlank()) return
         viewModelScope.launch {
-            val branch = runGit(path, listOf("/data/data/com.termux/files/usr/bin/git", "branch", "--show-current")).trim()
-            val status = runGit(path, listOf("/data/data/com.termux/files/usr/bin/git", "status", "--short"))
+            val branch = runGit(path, listOf(gitBinary, "branch", "--show-current")).trim()
+            val status = runGit(path, listOf(gitBinary, "status", "--short"))
             _uiState.value = _uiState.value.copy(currentBranch = branch, status = status.ifBlank { "Working tree clean" })
         }
     }
 
     fun stageAll() {
-        runGitCommand(listOf("/data/data/com.termux/files/usr/bin/git", "add", "-A"), "Staged all changes")
+        runGitCommand(listOf(gitBinary, "add", "-A"), "Staged all changes")
     }
 
     fun commitAndPush(message: String) {
@@ -63,12 +68,12 @@ class GitViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             addLog("Staging all changes...")
-            runGit(path, listOf("/data/data/com.termux/files/usr/bin/git", "add", "-A"))
+            runGit(path, listOf(gitBinary, "add", "-A"))
             addLog("Committing: $message")
-            val commitOut = runGit(path, listOf("/data/data/com.termux/files/usr/bin/git", "commit", "-m", message))
+            val commitOut = runGit(path, listOf(gitBinary, "commit", "-m", message))
             addLog(commitOut.trim())
             addLog("Pushing to origin...")
-            val pushOut = runGit(path, listOf("/data/data/com.termux/files/usr/bin/git", "push", "origin", "HEAD"))
+            val pushOut = runGit(path, listOf(gitBinary, "push", "origin", "HEAD"))
             addLog(pushOut.trim())
             addLog("Done!")
             _uiState.value = _uiState.value.copy(isLoading = false)
@@ -76,8 +81,8 @@ class GitViewModel @Inject constructor(
         }
     }
 
-    fun push() = runGitCommand(listOf("/data/data/com.termux/files/usr/bin/git", "push", "origin", "HEAD"), "Pushing...")
-    fun pull() = runGitCommand(listOf("/data/data/com.termux/files/usr/bin/git", "pull"), "Pulling...")
+    fun push() = runGitCommand(listOf(gitBinary, "push", "origin", "HEAD"), "Pushing...")
+    fun pull() = runGitCommand(listOf(gitBinary, "pull"), "Pulling...")
 
     private fun runGitCommand(cmd: List<String>, label: String) {
         val path = _uiState.value.projectPath
