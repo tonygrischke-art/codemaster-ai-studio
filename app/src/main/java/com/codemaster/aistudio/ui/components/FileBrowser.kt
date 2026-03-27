@@ -61,18 +61,18 @@ fun FileBrowserDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOfNotNull(
-                        listOf("SDCard" to "/sdcard"),
-                        listOf("Termux" to "/data/data/com.termux/files/home"),
-                        listOf("Current" to System.getProperty("user.dir") ?: "/data/data/com.termux/files/home"),
-                        listOfNotNull("Up" to File(currentPath).parent)
-                    ).flatten().forEach { (label, path) ->
-                        if (path != null) {
-                            SuggestionChip(
-                                onClick = { currentPath = path },
-                                label = { Text(label, style = MaterialTheme.typography.labelSmall) }
-                            )
-                        }
+                    val quickPaths = listOfNotNull(
+                        "SDCard" to "/sdcard",
+                        "Termux" to "/data/data/com.termux/files/home",
+                        "Current" to (System.getProperty("user.dir") ?: "/data/data/com.termux/files/home"),
+                        File(currentPath).parent?.let { "Up" to it }
+                    )
+                    quickPaths.forEach { pair ->
+                        val (label, path) = pair
+                        SuggestionChip(
+                            onClick = { currentPath = path },
+                            label = { Text(text = label, style = MaterialTheme.typography.labelSmall) }
+                        )
                     }
                 }
                 Spacer(Modifier.height(8.dp))
