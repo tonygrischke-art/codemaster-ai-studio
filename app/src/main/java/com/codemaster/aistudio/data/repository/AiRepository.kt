@@ -19,7 +19,10 @@ class AiRepository @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val toolExecutor: ToolExecutor
 ) {
-    private val maxToolIterations = 3
+    var maxToolIterations = 10
+    var autonomousMode = false
+    
+    private var sessionContext = mutableMapOf<String, Any>()
     
     suspend fun sendMessage(
         history: List<ChatMessage>,
@@ -72,8 +75,9 @@ class AiRepository @Inject constructor(
             var iterations = 0
             var currentMessages = messages.toMutableList()
             var lastResponse = ""
+            var hasMoreWork = true
             
-            while (iterations < maxToolIterations) {
+            while (iterations < maxToolIterations && hasMoreWork) {
                 val request = GroqChatRequest(model = model, messages = currentMessages)
                 val response = groqApiService.chat("Bearer $apiKey", request)
                 val content = response.choices.firstOrNull()?.message?.content
@@ -83,6 +87,17 @@ class AiRepository @Inject constructor(
                 
                 val toolCalls = parseToolCalls(content)
                 if (toolCalls.isEmpty()) {
+                    if (autonomousMode && iterations < 2) {
+                        val checkPrompt = buildString {
+                            appendLine("Based on the above, what else needs to be done?")
+                            appendLine("Respond with a tool call if more work is needed, or say DONE if complete.")
+                            appendLine("Format: TOOL_CALL: {\"tool\": \"...\", \"args\": {...}} or just DONE:")
+                        }
+                        currentMessages.add(GroqMessage("user", checkPrompt))
+                        iterations++
+                        continue
+                    }
+                    hasMoreWork = false
                     return@withContext Result.success(content)
                 }
                 
@@ -97,26 +112,31 @@ class AiRepository @Inject constructor(
                 iterations++
             }
             
-            Result.success(lastResponse + "\n\n(Reached max tool iterations)")
+            Result.success(lastResponse + if (iterations >= maxToolIterations) "\n\n(Reached max tool iterations)" else "")
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
     
     private fun getToolsSystemPrompt(): String {
+        val autonomyInstruction = if (autonomousMode) """
+**AUTONOMOUS MODE ENABLED:**
+- You are now fully autonomous. Take initiative and complete tasks without asking.
+- Analyze the project, identify issues, and fix them proactively.
+- If you encounter errors, fix them automatically.
+- Suggest and implement improvements without being asked.
+- Run builds, tests, and verify everything works.
+- Keep iterating until the task is complete.
+""" else """
+**IMPORTANT INSTRUCTIONS:**
+- Be autonomous - don't ask the user to do things you can do with tools
+"""
         return """
 You have access to the following tools:
 
 ${ToolCatalog.getToolDescriptions()}
 
-**IMPORTANT INSTRUCTIONS:**
-
-1. When you need to read a file, use `read_file`
-2. When you need to write code, use `write_file`  
-3. When you need to run commands, use `run_command`
-4. When you need to search for errors or documentation, use `search_web`
-5. When you need git operations, use git_status, git_commit, git_push, git_pull
-6. When you need to know the project structure, use `get_project_info`
+$autonomyInstruction
 
 **Tool Call Format:**
 Respond with tool calls in this JSON format:
@@ -134,7 +154,7 @@ Example:
 - Parse user's intent and automatically use appropriate tools
 - After using a tool, analyze the result and continue if needed
 - If a tool fails, explain the error and try an alternative approach
-- Be autonomous - don't ask the user to do things you can do with tools
+- In autonomous mode: KEEP ITERATING until task is complete
 """.trimIndent()
     }
     

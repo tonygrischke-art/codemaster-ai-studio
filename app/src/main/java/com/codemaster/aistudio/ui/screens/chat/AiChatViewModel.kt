@@ -1,6 +1,8 @@
 package com.codemaster.aistudio.ui.screens.chat
 
 import androidx.lifecycle.viewModelScope
+import com.codemaster.aistudio.data.agent.AgentEvent
+import com.codemaster.aistudio.data.agent.AutonomousAgent
 import com.codemaster.aistudio.data.model.AiPersona
 import com.codemaster.aistudio.data.model.AI_PERSONAS
 import com.codemaster.aistudio.data.model.ChatMessage
@@ -53,6 +55,8 @@ data class ChatUiState(
     val activeTabIndex: Int = 0,
     val terminalOutput: String? = null,
     val isAgentMode: Boolean = true,
+    val isAutonomous: Boolean = false,
+    val agentSuggestions: List<String> = emptyList(),
     val toolExecutions: List<ToolExecution> = emptyList(),
     val lastToolResult: String? = null
 )
@@ -64,7 +68,8 @@ class AiChatViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val fsRepository: FileSystemRepository,
     private val projectRepository: ProjectRepository,
-    private val toolExecutor: ToolExecutor
+    private val toolExecutor: ToolExecutor,
+    private val autonomousAgent: AutonomousAgent
 ) : BaseViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -77,6 +82,30 @@ class AiChatViewModel @Inject constructor(
     }
     private var autoSaveJobs = mutableMapOf<Int, Job>()
 
+    init {
+        viewModelScope.launch {
+            autonomousAgent.events.collect { event ->
+                when (event) {
+                    is AgentEvent.Suggestion -> {
+                        val current = _uiState.value.agentSuggestions
+                        _uiState.value = _uiState.value.copy(agentSuggestions = current + event.message)
+                    }
+                    is AgentEvent.TaskCompleted -> {
+                        _uiState.value = _uiState.value.copy(
+                            messages = _uiState.value.messages + ChatMessage(
+                                projectId = currentProjectId,
+                                role = "assistant",
+                                content = event.task.result ?: "Task completed",
+                                tokenCount = aiRepository.estimateTokens(event.task.result ?: "")
+                            )
+                        )
+                    }
+                    else -> {}
+                }
+            }
+        }
+    }
+
     fun init(projectId: Long) {
         currentProjectId = projectId
         viewModelScope.launch {
@@ -86,6 +115,7 @@ class AiChatViewModel @Inject constructor(
 
             projectPath = projectRepository.getProjectPath(projectId)
             toolExecutor.setProjectPath(projectPath)
+            autonomousAgent.setProjectPath(projectPath)
             
             if (projectPath.isNotBlank()) loadProjectContext(projectPath)
 
@@ -102,6 +132,41 @@ class AiChatViewModel @Inject constructor(
 
     fun setAgentMode(enabled: Boolean) {
         _uiState.value = _uiState.value.copy(isAgentMode = enabled)
+    }
+
+    fun setAutonomousMode(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(isAutonomous = enabled)
+        autonomousAgent.enableAutonomousMode(enabled)
+        if (enabled) {
+            autonomousAgent.setProjectPath(projectPath)
+            autonomousAgent.startAutonomousAgent()
+            viewModelScope.launch {
+                autonomousAgent.analyzeProjectAndSuggest()
+            }
+        } else {
+            autonomousAgent.stopAutonomousAgent()
+        }
+    }
+
+    fun runAutonomousTask(task: String) {
+        if (!_uiState.value.isAutonomous) return
+        viewModelScope.launch {
+            autonomousAgent.runAutonomousTask(task)
+        }
+    }
+
+    fun dismissSuggestion(index: Int) {
+        val current = _uiState.value.agentSuggestions.toMutableList()
+        if (index in current.indices) {
+            current.removeAt(index)
+            _uiState.value = _uiState.value.copy(agentSuggestions = current)
+        }
+    }
+
+    fun acceptSuggestion(index: Int) {
+        val suggestion = _uiState.value.agentSuggestions.getOrNull(index) ?: return
+        dismissSuggestion(index)
+        runAutonomousTask(suggestion)
     }
 
     private fun loadProjectContext(path: String) {
