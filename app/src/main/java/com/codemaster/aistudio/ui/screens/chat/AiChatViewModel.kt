@@ -9,6 +9,7 @@ import com.codemaster.aistudio.data.repository.ChatRepository
 import com.codemaster.aistudio.data.repository.FileSystemRepository
 import com.codemaster.aistudio.data.repository.ProjectRepository
 import com.codemaster.aistudio.data.repository.SettingsRepository
+import com.codemaster.aistudio.data.tools.ToolExecutor
 import com.codemaster.aistudio.ui.base.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -28,6 +29,14 @@ data class OpenTab(
     val isDirty: Boolean = false
 )
 
+data class ToolExecution(
+    val toolName: String,
+    val arguments: Map<String, String>,
+    val isRunning: Boolean = false,
+    val result: String? = null,
+    val error: String? = null
+)
+
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val inputText: String = "",
@@ -42,7 +51,10 @@ data class ChatUiState(
     val projectContext: String? = null,
     val openTabs: List<OpenTab> = emptyList(),
     val activeTabIndex: Int = 0,
-    val terminalOutput: String? = null
+    val terminalOutput: String? = null,
+    val isAgentMode: Boolean = true,
+    val toolExecutions: List<ToolExecution> = emptyList(),
+    val lastToolResult: String? = null
 )
 
 @HiltViewModel
@@ -51,7 +63,8 @@ class AiChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val settingsRepository: SettingsRepository,
     private val fsRepository: FileSystemRepository,
-    private val projectRepository: ProjectRepository
+    private val projectRepository: ProjectRepository,
+    private val toolExecutor: ToolExecutor
 ) : BaseViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -69,9 +82,11 @@ class AiChatViewModel @Inject constructor(
         viewModelScope.launch {
             val personaId = settingsRepository.getPersonaId()
             val persona = AI_PERSONAS.find { it.id == personaId } ?: AI_PERSONAS.first()
-            _uiState.value = _uiState.value.copy(currentPersona = persona)
+            _uiState.value = _uiState.value.copy(currentPersona = persona, isAgentMode = true)
 
             projectPath = projectRepository.getProjectPath(projectId)
+            toolExecutor.setProjectPath(projectPath)
+            
             if (projectPath.isNotBlank()) loadProjectContext(projectPath)
 
             chatRepository.getMessagesForProject(projectId)
@@ -83,6 +98,10 @@ class AiChatViewModel @Inject constructor(
                     )
                 }
         }
+    }
+
+    fun setAgentMode(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(isAgentMode = enabled)
     }
 
     private fun loadProjectContext(path: String) {
@@ -286,14 +305,25 @@ class AiChatViewModel @Inject constructor(
             )
             chatRepository.saveMessage(userMessage)
             val updatedMessages = state.messages + userMessage
-            _uiState.value = state.copy(inputText = "", isLoading = true, attachedFileName = null, attachedFileContent = null)
+            _uiState.value = state.copy(inputText = "", isLoading = true, attachedFileName = null, attachedFileContent = null, toolExecutions = emptyList())
 
-            val result = aiRepository.sendMessage(
-                history = updatedMessages,
-                userMessage = text,
-                attachedFileContent = state.attachedFileContent,
-                systemPrompt = enrichedSystemPrompt
-            )
+            val result = if (state.isAgentMode) {
+                aiRepository.sendMessageWithTools(
+                    history = updatedMessages,
+                    userMessage = text,
+                    attachedFileContent = state.attachedFileContent,
+                    systemPrompt = enrichedSystemPrompt,
+                    enableTools = true
+                )
+            } else {
+                aiRepository.sendMessage(
+                    history = updatedMessages,
+                    userMessage = text,
+                    attachedFileContent = state.attachedFileContent,
+                    systemPrompt = enrichedSystemPrompt
+                )
+            }
+            
             result.fold(
                 onSuccess = { response ->
                     chatRepository.saveMessage(ChatMessage(
@@ -302,7 +332,9 @@ class AiChatViewModel @Inject constructor(
                     ))
                     _uiState.value = _uiState.value.copy(isLoading = false)
                 },
-                onFailure = { e -> _uiState.value = _uiState.value.copy(isLoading = false, error = e.message) }
+                onFailure = { e -> 
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = e.message) 
+                }
             )
         }
     }

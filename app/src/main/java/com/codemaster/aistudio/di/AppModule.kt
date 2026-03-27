@@ -50,8 +50,10 @@ object AppModule {
     fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> = context.dataStore
 
     @Provides @Singleton
-    fun provideFileSystemRepository(@ApplicationContext context: Context): FileSystemRepository =
-        FileSystemRepository(context)
+    fun provideFileSystemRepository(
+        @ApplicationContext context: Context,
+        safHelper: com.codemaster.aistudio.data.util.SafHelper
+    ): FileSystemRepository = FileSystemRepository(context, safHelper)
 
     @Provides @Singleton
     fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
