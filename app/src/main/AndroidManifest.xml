@@ -6,14 +6,9 @@
 
     <!-- Storage - legacy -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
 
-    <!-- Storage - modern -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_DOCUMENTS" />
-
-    <!-- Manage all files (needed for /sdcard access on Android 11+) -->
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <!-- Storage - modern (SAF, no permission needed) -->
+    <!-- MANAGE_EXTERNAL_STORAGE removed - using SAF instead -->
 
     <!-- Termux integration -->
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />

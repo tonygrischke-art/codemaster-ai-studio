@@ -71,7 +71,6 @@ class AiChatViewModel @Inject constructor(
             val persona = AI_PERSONAS.find { it.id == personaId } ?: AI_PERSONAS.first()
             _uiState.value = _uiState.value.copy(currentPersona = persona)
 
-            // Use proper path resolution
             projectPath = projectRepository.getProjectPath(projectId)
             if (projectPath.isNotBlank()) loadProjectContext(projectPath)
 
@@ -89,12 +88,32 @@ class AiChatViewModel @Inject constructor(
     private fun loadProjectContext(path: String) {
         viewModelScope.launch {
             try {
-                val root = File(path)
-                if (!root.exists()) return@launch
-                val tree = buildFileTree(root, root, 0)
-                _uiState.value = _uiState.value.copy(projectContext = tree)
+                if (path.startsWith("saf://")) {
+                    val tree = fsRepository.scanDirectory(path).getOrNull() ?: return@launch
+                    val treeText = buildSafFileTree(tree)
+                    _uiState.value = _uiState.value.copy(projectContext = treeText)
+                } else {
+                    val root = File(path)
+                    if (!root.exists()) return@launch
+                    val tree = buildFileTree(root, root, 0)
+                    _uiState.value = _uiState.value.copy(projectContext = tree)
+                }
             } catch (_: Exception) {}
         }
+    }
+
+    private fun buildSafFileTree(files: List<com.codemaster.aistudio.data.repository.DiskFile>): String {
+        val sb = StringBuilder()
+        val rootFiles = files.filter { it.depth == 0 }.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
+        
+        rootFiles.forEach { file ->
+            val prefix = if (file.isDirectory) "/" else ""
+            val size = if (!file.isDirectory && file.size > 0) {
+                if (file.size < 1024) "${file.size}B" else "${file.size / 1024}KB"
+            } else ""
+            sb.appendLine("${file.name}$prefix ${if (size.isNotBlank()) "($size)" else ""}")
+        }
+        return sb.toString()
     }
 
     private fun buildFileTree(root: File, current: File, depth: Int): String {
@@ -119,8 +138,11 @@ class AiChatViewModel @Inject constructor(
     }
 
     fun openFile(filePath: String) {
-        val fullPath = if (filePath.startsWith("/")) filePath
-                       else if (projectPath.isNotBlank()) "$projectPath/$filePath"
+        val fullPath = if (filePath.startsWith("/") || filePath.startsWith("saf://")) filePath
+                       else if (projectPath.isNotBlank()) {
+                           if (projectPath.startsWith("saf://")) "$projectPath/$filePath" 
+                           else "$projectPath/$filePath"
+                       }
                        else filePath
         viewModelScope.launch {
             val existing = _uiState.value.openTabs.indexOfFirst { it.filePath == fullPath }
@@ -128,9 +150,15 @@ class AiChatViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(activeTabIndex = existing)
                 return@launch
             }
+            
             fsRepository.readFile(fullPath).fold(
                 onSuccess = { content ->
-                    val tab = OpenTab(fileName = File(fullPath).name, filePath = fullPath, content = content)
+                    val fileName = if (fullPath.startsWith("saf://")) {
+                        filePath.substringAfterLast("/")
+                    } else {
+                        File(fullPath).name
+                    }
+                    val tab = OpenTab(fileName = fileName, filePath = fullPath, content = content)
                     val tabs = _uiState.value.openTabs + tab
                     _uiState.value = _uiState.value.copy(openTabs = tabs, activeTabIndex = tabs.size - 1)
                 },
@@ -194,7 +222,12 @@ class AiChatViewModel @Inject constructor(
 
     fun saveContentAsFile(fileName: String, content: String) {
         viewModelScope.launch {
-            val savePath = if (projectPath.isNotBlank()) "$projectPath/$fileName" else "/sdcard/$fileName"
+            val savePath = if (projectPath.isNotBlank()) {
+                if (projectPath.startsWith("saf://")) "$projectPath/$fileName" 
+                else "$projectPath/$fileName"
+            } else {
+                "/sdcard/$fileName"
+            }
             fsRepository.writeFile(savePath, content).fold(
                 onSuccess = { _uiState.value = _uiState.value.copy(successMessage = "Saved to $savePath") },
                 onFailure = { _uiState.value = _uiState.value.copy(error = "Save failed: ${it.message}") }
@@ -239,7 +272,7 @@ class AiChatViewModel @Inject constructor(
         if (state.isLoading) return
 
         val attachedName = state.attachedFileName
-        val displayText = if (attachedName != null) "$text\n $attachedName" else text
+        val displayText = if (attachedName != null) "$text\n [$attachedName]" else text
 
         val projectContextSection = state.projectContext?.let { "\n\nProject file tree:\n$it" } ?: ""
         val enrichedSystemPrompt = state.currentPersona.systemPrompt + projectContextSection

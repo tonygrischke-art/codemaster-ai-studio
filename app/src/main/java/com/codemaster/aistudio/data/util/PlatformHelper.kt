@@ -1,14 +1,20 @@
 package com.codemaster.aistudio.data.util
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.DocumentsContract
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class PlatformHelper @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val safHelper: SafHelper
 ) {
     companion object {
         private const val TERMUX_PREFIX = "/data/data/com.termux/files"
@@ -24,29 +30,33 @@ class PlatformHelper @Inject constructor(
         get() = File("$TERMUX_PREFIX").exists() && File("$TERMUX_PREFIX/usr").exists()
 
     val homeDirectory: String
-        get() = if (isTermuxAvailable) TERMUX_HOME else context.filesDir.absolutePath
-
-    val documentsDirectory: String
-        get() = if (isTermuxAvailable) {
-            "$TERMUX_HOME/Documents"
-        } else {
-            context.getExternalFilesDir(null)?.absolutePath ?: "${context.filesDir}/Documents"
+        get() = when {
+            safHelper.hasPersistedAccess() -> "saf://root"
+            isTermuxAvailable -> TERMUX_HOME
+            else -> context.filesDir.absolutePath
         }
 
+    val documentsDirectory: String
+        get() = when {
+            safHelper.hasPersistedAccess() -> "saf://root"
+            isTermuxAvailable -> "$TERMUX_HOME/Documents"
+            else -> context.getExternalFilesDir(null)?.absolutePath ?: "${context.filesDir.absolutePath}/Documents"
+        }
+
+    val isUsingSaf: Boolean
+        get() = safHelper.hasPersistedAccess()
+
     val gitBinary: String?
-        get() = listOf(
-            "$TERMUX_USR_BIN/git",
-            "/system/bin/git",
-            "/system/xbin/git"
-        ).firstOrNull { File(it).exists() }
+        get() = when {
+            isTermuxAvailable -> "$TERMUX_USR_BIN/git"
+            else -> null
+        }
 
     val bashBinary: String?
-        get() = listOf(
-            "$TERMUX_USR_BIN/bash",
-            "$TERMUX_USR_BIN/sh",
-            "/system/bin/sh",
-            "/system/xbin/sh"
-        ).firstOrNull { File(it).exists() }
+        get() = when {
+            isTermuxAvailable -> "$TERMUX_USR_BIN/bash"
+            else -> "/system/bin/sh"
+        }
 
     fun buildEnvironment(): Map<String, String> {
         val env = mutableMapOf<String, String>()
@@ -67,11 +77,22 @@ class PlatformHelper @Inject constructor(
     }
 
     fun createProjectDirectory(projectName: String): String {
-        val baseDir = documentsDirectory
-        val projectDir = File(baseDir, projectName)
-        if (!projectDir.exists()) {
-            projectDir.mkdirs()
+        return if (safHelper.hasPersistedAccess()) {
+            "saf://root/$projectName"
+        } else {
+            val baseDir = documentsDirectory
+            val projectDir = File(baseDir, projectName)
+            if (!projectDir.exists()) projectDir.mkdirs()
+            projectDir.absolutePath
         }
-        return projectDir.absolutePath
     }
+
+    fun isTermuxGitAvailable(): Boolean = gitBinary != null
+
+    fun getGitInstallInstructions(): String = 
+        if (isTermuxAvailable) {
+            "Run in Termux: pkg install git"
+        } else {
+            "Install Termux from F-Droid or Play Store, then run: pkg install git"
+        }
 }

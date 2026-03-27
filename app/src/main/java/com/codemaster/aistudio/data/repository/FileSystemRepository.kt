@@ -1,6 +1,9 @@
 package com.codemaster.aistudio.data.repository
 
 import android.content.Context
+import android.net.Uri
+import com.codemaster.aistudio.data.util.SafFile
+import com.codemaster.aistudio.data.util.SafHelper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -16,12 +19,15 @@ data class DiskFile(
     val lastModified: Long,
     val isDirectory: Boolean,
     val extension: String,
-    val depth: Int = 0
+    val depth: Int = 0,
+    val isSafBased: Boolean = false,
+    val safDocId: String? = null
 )
 
 @Singleton
 class FileSystemRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val safHelper: SafHelper
 ) {
     private val ignoredDirs = setOf(
         ".git", "build", ".gradle", ".idea", "node_modules",
@@ -41,8 +47,14 @@ class FileSystemRepository @Inject constructor(
         "toml", "properties", "sql", "graphql", "proto"
     )
 
+    fun isUsingSaf(): Boolean = safHelper.hasPersistedAccess()
+
     suspend fun scanDirectory(rootPath: String, maxDepth: Int = 6): Result<List<DiskFile>> =
         withContext(Dispatchers.IO) {
+            if (rootPath.startsWith("saf://")) {
+                return@withContext scanSafDirectory(maxDepth)
+            }
+            
             try {
                 val root = File(rootPath)
                 if (!root.exists()) return@withContext Result.failure(Exception("Path does not exist: $rootPath"))
@@ -55,6 +67,31 @@ class FileSystemRepository @Inject constructor(
                 Result.failure(e)
             }
         }
+
+    private suspend fun scanSafDirectory(maxDepth: Int): Result<List<DiskFile>> {
+        return try {
+            val files = safHelper.scanDirectory("", maxDepth)
+            val diskFiles = files.map { safFileToDiskFile(it, "") }
+            Result.success(diskFiles)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private fun safFileToDiskFile(safFile: SafFile, rootPath: String): DiskFile {
+        return DiskFile(
+            name = safFile.name,
+            path = "saf://${safFile.docId}",
+            relativePath = safFile.path,
+            size = safFile.size,
+            lastModified = System.currentTimeMillis(),
+            isDirectory = safFile.isDirectory,
+            extension = if (safFile.isDirectory) "" else safFile.name.substringAfterLast(".", ""),
+            depth = safFile.depth,
+            isSafBased = true,
+            safDocId = safFile.docId
+        )
+    }
 
     private fun scanRecursive(dir: File, rootPath: String, result: MutableList<DiskFile>, depth: Int, maxDepth: Int) {
         if (depth > maxDepth) return
@@ -85,6 +122,11 @@ class FileSystemRepository @Inject constructor(
     }
 
     suspend fun readFile(path: String): Result<String> = withContext(Dispatchers.IO) {
+        if (path.startsWith("saf://")) {
+            val docId = path.removePrefix("saf://")
+            return@withContext safHelper.readFile(docId)
+        }
+        
         try {
             val file = File(path)
             if (!file.exists()) return@withContext Result.failure(Exception("File not found: $path"))
@@ -96,6 +138,11 @@ class FileSystemRepository @Inject constructor(
     }
 
     suspend fun writeFile(path: String, content: String): Result<Unit> = withContext(Dispatchers.IO) {
+        if (path.startsWith("saf://")) {
+            val docId = path.removePrefix("saf://")
+            return@withContext safHelper.writeFile(docId, content)
+        }
+        
         try {
             val file = File(path)
             file.parentFile?.mkdirs()
@@ -107,6 +154,12 @@ class FileSystemRepository @Inject constructor(
     }
 
     suspend fun createFile(dirPath: String, fileName: String): Result<String> = withContext(Dispatchers.IO) {
+        if (dirPath.startsWith("saf://")) {
+            val parentDocId = dirPath.removePrefix("saf://")
+            val mimeType = getMimeType(fileName)
+            return@withContext safHelper.createFile(parentDocId, fileName, mimeType).map { "saf://${it.docId}" }
+        }
+        
         try {
             val file = File(dirPath, fileName)
             file.parentFile?.mkdirs()
@@ -117,9 +170,59 @@ class FileSystemRepository @Inject constructor(
         }
     }
 
+    suspend fun createDirectory(dirPath: String, dirName: String): Result<String> = withContext(Dispatchers.IO) {
+        if (dirPath.startsWith("saf://")) {
+            val parentDocId = dirPath.removePrefix("saf://")
+            return@withContext safHelper.createDirectory(parentDocId, dirName).map { "saf://${it.docId}" }
+        }
+        
+        try {
+            val dir = File(dirPath, dirName)
+            dir.mkdirs()
+            Result.success(dir.absolutePath)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun deleteFile(path: String): Result<Unit> = withContext(Dispatchers.IO) {
+        if (path.startsWith("saf://")) {
+            val docId = path.removePrefix("saf://")
+            return@withContext safHelper.deleteFile(docId)
+        }
+        
         try { File(path).delete(); Result.success(Unit) }
         catch (e: Exception) { Result.failure(e) }
+    }
+
+    suspend fun listFiles(dirPath: String): Result<List<DiskFile>> = withContext(Dispatchers.IO) {
+        if (dirPath.startsWith("saf://")) {
+            val docId = dirPath.removePrefix("saf://")
+            val files = safHelper.listFiles(docId)
+            return@withContext Result.success(files.map { safFileToDiskFile(it, dirPath) })
+        }
+        
+        try {
+            val dir = File(dirPath)
+            if (!dir.exists() || !dir.isDirectory) {
+                return@withContext Result.failure(Exception("Not a directory: $dirPath"))
+            }
+            val files = dir.listFiles()?.map { file ->
+                DiskFile(
+                    name = file.name,
+                    path = file.absolutePath,
+                    relativePath = file.name,
+                    size = if (file.isFile) file.length() else 0,
+                    lastModified = file.lastModified(),
+                    isDirectory = file.isDirectory,
+                    extension = file.extension.lowercase(),
+                    depth = 0
+                )
+            } ?: emptyList()
+            Result.success(files.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() })))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     fun getLanguageFromExtension(ext: String): String = when (ext.lowercase()) {
@@ -155,5 +258,39 @@ class FileSystemRepository @Inject constructor(
         bytes < 1024        -> "${bytes}B"
         bytes < 1024 * 1024 -> "${bytes / 1024}KB"
         else                -> "${bytes / (1024 * 1024)}MB"
+    }
+
+    private fun getMimeType(fileName: String): String {
+        return when (fileName.substringAfterLast(".", "").lowercase()) {
+            "kt", "kts"    -> "text/x-kotlin"
+            "java"         -> "text/x-java"
+            "py"           -> "text/x-python"
+            "js"           -> "text/javascript"
+            "ts"           -> "text/typescript"
+            "jsx"          -> "text/jsx"
+            "tsx"          -> "text/tsx"
+            "dart"         -> "text/x-dart"
+            "cpp", "cc"    -> "text/x-c++src"
+            "c", "h"       -> "text/x-csrc"
+            "cs"           -> "text/x-csharp"
+            "go"           -> "text/x-go"
+            "rs"           -> "text/x-rustsrc"
+            "swift"        -> "text/x-swift"
+            "rb"           -> "text/x-ruby"
+            "php"          -> "text/x-php"
+            "html"         -> "text/html"
+            "css"          -> "text/css"
+            "scss"         -> "text/x-scss"
+            "xml"          -> "text/xml"
+            "json"         -> "application/json"
+            "yaml", "yml"  -> "text/yaml"
+            "md"           -> "text/markdown"
+            "txt"          -> "text/plain"
+            "sh", "bash"   -> "application/x-sh"
+            "gradle"       -> "text/x-gradle"
+            "toml"         -> "text/x-toml"
+            "sql"          -> "text/x-sql"
+            else           -> "application/octet-stream"
+        }
     }
 }

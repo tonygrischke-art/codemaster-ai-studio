@@ -10,38 +10,36 @@ import javax.inject.Singleton
 
 @Singleton
 class StorageHelper @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val safHelper: SafHelper
 ) {
-    private val isExternalStorageManager: Boolean
-        get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            Environment.isExternalStorageManager()
-        } else {
-            true
-        }
+    private val ignoredDirs = setOf(
+        ".git", "build", ".gradle", ".idea", "node_modules",
+        "__pycache__", ".DS_Store", "out", "dist", ".dart_tool"
+    )
 
     data class StorageLocation(
         val name: String,
         val path: String,
         val isWritable: Boolean,
-        val isAppPrivate: Boolean
+        val isAppPrivate: Boolean,
+        val isSafBased: Boolean = false,
+        val safDocId: String? = null
     )
 
     fun getAvailableLocations(): List<StorageLocation> {
         val locations = mutableListOf<StorageLocation>()
         
-        // 1. App's private external files directory (always accessible)
         context.getExternalFilesDir(null)?.let { dir ->
+            dir.mkdirs()
             locations.add(StorageLocation(
                 name = "App Files",
                 path = dir.absolutePath,
                 isWritable = true,
                 isAppPrivate = true
             ))
-            // Ensure directory exists
-            dir.mkdirs()
         }
         
-        // 2. App's private files directory
         context.filesDir.let { dir ->
             locations.add(StorageLocation(
                 name = "Internal Storage",
@@ -51,7 +49,6 @@ class StorageHelper @Inject constructor(
             ))
         }
         
-        // 3. App's external documents directory
         context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)?.let { dir ->
             dir.mkdirs()
             locations.add(StorageLocation(
@@ -62,44 +59,19 @@ class StorageHelper @Inject constructor(
             ))
         }
         
-        // 4. Shared external storage (requires MANAGE_EXTERNAL_STORAGE on Android 11+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (isExternalStorageManager) {
-                addExternalStorageLocations(locations)
-            }
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            addExternalStorageLocations(locations)
+        if (safHelper.hasPersistedAccess()) {
+            val rootName = safHelper.getRootDisplayName() ?: "External Storage"
+            locations.add(StorageLocation(
+                name = rootName,
+                path = "saf://root",
+                isWritable = true,
+                isAppPrivate = false,
+                isSafBased = true,
+                safDocId = ""
+            ))
         }
         
         return locations
-    }
-    
-    private fun addExternalStorageLocations(locations: MutableList<StorageLocation>) {
-        val externalDirs = mutableListOf<File>()
-        
-        // Primary external storage
-        Environment.getExternalStorageDirectory()?.let { externalDirs.add(it) }
-        
-        // Additional external storage volumes (USB, SD cards)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            val externalDirsArray = context.getExternalFilesDirs(null)
-            externalDirsArray.forEach { dir ->
-                dir?.parentFile?.parentFile?.parentFile?.let { volumeRoot ->
-                    if (!externalDirs.contains(volumeRoot) && volumeRoot.canRead()) {
-                        externalDirs.add(volumeRoot)
-                    }
-                }
-            }
-        }
-        
-        externalDirs.forEach { dir ->
-            locations.add(StorageLocation(
-                name = if (dir.path.contains("sdcard", ignoreCase = true)) "SDCard" else "Storage",
-                path = dir.absolutePath,
-                isWritable = dir.canWrite(),
-                isAppPrivate = false
-            ))
-        }
     }
     
     fun getDefaultLocation(): StorageLocation {
@@ -110,6 +82,20 @@ class StorageHelper @Inject constructor(
             isAppPrivate = true
         )
     }
+    
+    fun getSafLocation(): StorageLocation? {
+        if (!safHelper.hasPersistedAccess()) return null
+        return StorageLocation(
+            name = safHelper.getRootDisplayName() ?: "External",
+            path = "saf://root",
+            isWritable = true,
+            isAppPrivate = false,
+            isSafBased = true,
+            safDocId = ""
+        )
+    }
+    
+    fun isUsingSaf(): Boolean = safHelper.hasPersistedAccess()
     
     fun ensureDirectoryExists(path: String): Boolean {
         return try {
@@ -127,4 +113,6 @@ class StorageHelper @Inject constructor(
             false
         }
     }
+    
+    fun isIgnoredDirectory(name: String): Boolean = name in ignoredDirs
 }

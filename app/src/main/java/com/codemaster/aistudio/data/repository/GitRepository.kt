@@ -2,6 +2,7 @@ package com.codemaster.aistudio.data.repository
 
 import android.content.Context
 import com.codemaster.aistudio.data.util.PlatformHelper
+import com.codemaster.aistudio.data.util.SafHelper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -22,18 +23,29 @@ data class GitStatus(
 class GitRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
-    private val platformHelper: PlatformHelper
+    private val platformHelper: PlatformHelper,
+    private val safHelper: SafHelper
 ) {
     private fun findGitBinary(): String? = platformHelper.gitBinary
 
     private fun buildEnv(): Map<String, String> = platformHelper.buildEnvironment()
 
+    private fun isPathSafBased(path: String?): Boolean = path?.startsWith("saf://") == true
+
     private suspend fun runGit(vararg args: String, workDir: String? = null): Result<String> =
         withContext(Dispatchers.IO) {
-            try {
-                val git = findGitBinary()
-                    ?: return@withContext Result.failure(Exception("git not found. Install Termux and run: pkg install git"))
+            val git = findGitBinary()
+                ?: return@withContext Result.failure(Exception(
+                    "Git not available. " + platformHelper.getGitInstallInstructions()
+                ))
 
+            if (isPathSafBased(workDir)) {
+                return@withContext Result.failure(Exception(
+                    "Cannot run Git on SAF paths directly. Copy project to app storage or use Termux environment."
+                ))
+            }
+
+            try {
                 val cmd = mutableListOf(git) + args.toList()
                 val pb = ProcessBuilder(cmd).apply {
                     workDir?.let { directory(File(it)) }
@@ -53,6 +65,13 @@ class GitRepository @Inject constructor(
         }
 
     suspend fun getStatus(repoPath: String): Result<GitStatus> = withContext(Dispatchers.IO) {
+        if (isPathSafBased(repoPath)) {
+            return@withContext Result.success(GitStatus(
+                isRepo = false,
+                lastCommit = "Git unavailable on SAF storage. Use Termux or copy to app storage."
+            ))
+        }
+
         try {
             val isRepo = runGit("rev-parse", "--git-dir", workDir = repoPath).isSuccess
             if (!isRepo) return@withContext Result.success(GitStatus(isRepo = false))
@@ -100,15 +119,10 @@ class GitRepository @Inject constructor(
         if (token.isBlank() || owner.isBlank() || repo.isBlank())
             return Result.failure(Exception("Configure GitHub token, username, and repo in Settings first."))
         
-        // Configure credential cache for this session to avoid token in URL
-        val cacheTimeout = 300 // 5 minutes
+        val cacheTimeout = 300
         runGit("config", "--global", "credential.helper", "cache --timeout=$cacheTimeout", workDir = repoPath)
         
-        // Store credentials temporarily using git credential
-        val credentials = "username=$owner\npassword=$token"
         val url = "https://github.com/$owner/$repo.git"
-        
-        // Configure remote with clean URL
         runGit("remote", "set-url", "origin", url, workDir = repoPath)
         return runGit("push", "origin", "HEAD", workDir = repoPath)
     }
@@ -117,4 +131,7 @@ class GitRepository @Inject constructor(
 
     suspend fun log(repoPath: String, count: Int = 10): Result<String> =
         runGit("log", "--oneline", "-$count", workDir = repoPath)
+
+    fun getGitUnavailableMessage(): String = 
+        "Git requires Termux. Install Termux, then run: pkg install git"
 }
