@@ -151,7 +151,6 @@ fun HomeScreen(
 
         if (uiState.showFileBrowserDialog) {
             FileBrowserDialog(
-                startPath = "/sdcard",
                 onPathSelected = { path ->
                     viewModel.updateImportPath(path)
                     viewModel.hideFileBrowserDialog()
@@ -300,6 +299,12 @@ fun ImportProjectDialog(
     onImport: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val storageHelper = remember {
+        com.codemaster.aistudio.data.util.StorageHelper(context)
+    }
+    val quickPaths = remember { storageHelper.getAvailableLocations() }
+    
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -317,20 +322,19 @@ fun ImportProjectDialog(
                     label = { Text("Folder path") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2, maxLines = 3,
-                    placeholder = { Text("/sdcard/my-project") },
+                    placeholder = { Text("Select a folder below") },
                     trailingIcon = {
                         IconButton(onClick = onBrowse) {
                             Icon(Icons.Default.FolderOpen, "Browse", tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                 )
-                Text("Quick paths:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                listOf(
-                    "codemaster-ai-studio" to (android.os.Environment.getExternalStorageDirectory().absolutePath + "/codemaster-ai-studio"),
-                    "Termux home" to "/data/data/com.termux/files/home",
-                    "SDCard" to android.os.Environment.getExternalStorageDirectory().absolutePath
-                ).forEach { (label, quickPath) ->
-                    SuggestionChip(onClick = { onPathChange(quickPath) }, label = { Text(label, style = MaterialTheme.typography.labelSmall) })
+                Text("Quick access:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                quickPaths.take(3).forEach { location ->
+                    SuggestionChip(
+                        onClick = { onPathChange(location.path) }, 
+                        label = { Text(location.name, style = MaterialTheme.typography.labelSmall) }
+                    )
                 }
             }
         },

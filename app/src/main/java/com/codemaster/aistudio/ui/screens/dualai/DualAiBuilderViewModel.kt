@@ -67,8 +67,10 @@ class DualAiBuilderViewModel @Inject constructor(
                 .trim().replace(" ", "-")
                 .ifBlank { "AI-App" }
             val baseDir = context.getExternalFilesDir(null)?.absolutePath
-                ?: File("/sdcard/Documents").apply { mkdirs() }.absolutePath
-            val outputPath = "$baseDir/$projectName"
+                ?: context.filesDir.absolutePath
+            val outputDir = File(baseDir, projectName)
+            outputDir.mkdirs()
+            val outputPath = outputDir.absolutePath
 
             dualAiRepository.buildApp(
                 userDescription = state.userDescription,
