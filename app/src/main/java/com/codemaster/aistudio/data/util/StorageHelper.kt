@@ -12,7 +12,7 @@ import javax.inject.Singleton
 @Singleton
 class StorageHelper @Inject constructor(
     @ApplicationContext private val context: Context,
-    @Nullable private val safHelper: SafHelper?
+    @Nullable private val safHelper: SafHelper? = null
 ) {
     private val ignoredDirs = setOf(
         ".git", "build", ".gradle", ".idea", "node_modules",

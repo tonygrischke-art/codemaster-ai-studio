@@ -301,7 +301,7 @@ fun ImportProjectDialog(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val storageHelper = remember {
-        com.codemaster.aistudio.data.util.StorageHelper(context)
+        com.codemaster.aistudio.data.util.StorageHelper(context, null)
     }
     val quickPaths = remember { storageHelper.getAvailableLocations() }
     

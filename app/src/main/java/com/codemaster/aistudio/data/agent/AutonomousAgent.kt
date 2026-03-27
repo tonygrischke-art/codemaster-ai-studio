@@ -144,7 +144,7 @@ class AutonomousAgent @Inject constructor(
             _tasks.value = _tasks.value.map { if (it.id == task.id) updatedTask else it }
 
             aiRepository.autonomousMode = true
-            val history = taskHistory.map { ChatMessage("user", it.first) }.toMutableList()
+            val history = taskHistory.map { ChatMessage(projectId = -1L, role = "user", content = it.first) }.toMutableList()
 
             val result = aiRepository.sendMessageWithTools(
                 history = history,

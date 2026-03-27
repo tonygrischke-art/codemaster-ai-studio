@@ -29,7 +29,7 @@ fun FileBrowserDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val storageHelper = remember { StorageHelper(context) }
+    val storageHelper = remember { StorageHelper(context, null) }
     
     val defaultLocation = remember { storageHelper.getDefaultLocation() }
     val availableLocations = remember { storageHelper.getAvailableLocations() }

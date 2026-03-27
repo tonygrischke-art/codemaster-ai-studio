@@ -86,7 +86,7 @@ class ToolExecutor @Inject constructor(
             val parts = path.removePrefix("saf://").split("/")
             val dirName = parts.last()
             val parentDocId = if (parts.size > 1) parts.dropLast(1).joinToString("/") else ""
-            safHelper?.createDirectory(parentDocId, dirName).fold(
+            (safHelper?.createDirectory(parentDocId, dirName) ?: Result.failure(Exception("SAF not available"))).fold(
                 onSuccess = { ToolResult(true, "Directory created: $path") },
                 onFailure = { ToolResult(false, "", it.message ?: "Failed to create directory") }
             )
