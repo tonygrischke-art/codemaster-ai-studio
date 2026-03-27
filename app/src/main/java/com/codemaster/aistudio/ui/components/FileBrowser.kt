@@ -1,5 +1,6 @@
 package com.codemaster.aistudio.ui.components
 
+import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -18,19 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.codemaster.aistudio.data.util.StorageHelper
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.android.EntryPoint
-import dagger.hilt.android.HiltAndroid
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
 import java.io.File
-
-@EntryPoint
-@HiltAndroid
-@InstallIn(SingletonComponent::class)
-interface FileBrowserEntryPoint {
-    fun storageHelper(): StorageHelper
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,10 +29,7 @@ fun FileBrowserDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val entryPoint = remember {
-        EntryPointAccessors.fromApplication(context, FileBrowserEntryPoint::class.java)
-    }
-    val storageHelper = remember { entryPoint.storageHelper() }
+    val storageHelper = remember { StorageHelper(context) }
     
     val defaultLocation = remember { storageHelper.getDefaultLocation() }
     val availableLocations = remember { storageHelper.getAvailableLocations() }
