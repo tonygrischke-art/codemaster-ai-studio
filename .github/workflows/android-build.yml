@@ -32,12 +32,12 @@ jobs:
     
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
-      with:
-        api-level: ${{ env.ANDROID_COMPILE_SDK }}
-        build-tools: ${{ env.ANDROID_BUILD_TOOLS }}
     
     - name: Accept Android SDK licenses
       run: yes | sdkmanager --licenses
+    
+    - name: Install Android SDK components
+      run: sdkmanager "platforms;android-${{ env.ANDROID_COMPILE_SDK }}" "build-tools;${{ env.ANDROID_BUILD_TOOLS }}"
     
     - name: Create local.properties
       run: echo "sdk.dir=$ANDROID_HOME" > local.properties
@@ -93,12 +93,12 @@ jobs:
     
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
-      with:
-        api-level: ${{ env.ANDROID_COMPILE_SDK }}
-        build-tools: ${{ env.ANDROID_BUILD_TOOLS }}
     
     - name: Accept Android SDK licenses
       run: yes | sdkmanager --licenses
+    
+    - name: Install Android SDK components
+      run: sdkmanager "platforms;android-${{ env.ANDROID_COMPILE_SDK }}" "build-tools;${{ env.ANDROID_BUILD_TOOLS }}"
     
     - name: Create local.properties
       run: echo "sdk.dir=$ANDROID_HOME" > local.properties
