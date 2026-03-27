@@ -1,17 +1,20 @@
 package com.codemaster.aistudio.data.repository
 
+import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class SettingsRepository @Inject constructor(
-    private val dataStore: DataStore<Preferences>
+    private val dataStore: DataStore<Preferences>,
+    @ApplicationContext private val context: Context
 ) {
     companion object {
         val API_KEY             = stringPreferencesKey("groq_api_key")
@@ -49,7 +52,9 @@ class SettingsRepository @Inject constructor(
     suspend fun saveGitHubBranch(b: String)      { dataStore.edit { it[GITHUB_BRANCH] = b } }
     suspend fun getPersonaId(): String           = dataStore.data.first()[AI_PERSONA] ?: "codemaster"
     suspend fun savePersonaId(id: String)        { dataStore.edit { it[AI_PERSONA] = id } }
-    suspend fun getProjectPath(): String         = dataStore.data.first()[PROJECT_PATH] ?: "/sdcard/codemaster-ai-studio"
+    suspend fun getProjectPath(): String         = dataStore.data.first()[PROJECT_PATH] 
+        ?: context.getExternalFilesDir(null)?.absolutePath 
+        ?: context.filesDir.absolutePath
     suspend fun saveProjectPath(p: String)       { dataStore.edit { it[PROJECT_PATH] = p } }
     suspend fun getOnboardingComplete(): Boolean = dataStore.data.first()[ONBOARDING_COMPLETE] ?: false
     suspend fun saveOnboardingComplete(v: Boolean) { dataStore.edit { it[ONBOARDING_COMPLETE] = v } }

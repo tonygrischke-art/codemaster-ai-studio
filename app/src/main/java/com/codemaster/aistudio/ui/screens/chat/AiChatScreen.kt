@@ -66,7 +66,8 @@ fun AiChatScreen(
         uri?.let {
             val fileName = context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
                 val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                cursor.moveToFirst(); cursor.getString(idx)
+                cursor.moveToFirst()
+                if (idx >= 0) cursor.getString(idx) else null
             } ?: "attachment"
             val content = context.contentResolver.openInputStream(it)?.use { s ->
                 BufferedReader(InputStreamReader(s)).readText()

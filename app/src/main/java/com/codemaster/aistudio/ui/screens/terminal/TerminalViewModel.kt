@@ -84,8 +84,9 @@ class TerminalViewModel @Inject constructor(
                     redirectErrorStream(false)
                 }
 
-                process = pb.start()
-                writer = OutputStreamWriter(process!!.outputStream, Charsets.UTF_8)
+                val proc = pb.start()
+                process = proc
+                writer = OutputStreamWriter(proc.outputStream, Charsets.UTF_8)
                 _uiState.value = _uiState.value.copy(
                     isRunning = true,
                     shell = shellCmd.first(),
@@ -95,21 +96,25 @@ class TerminalViewModel @Inject constructor(
                 readerJob = viewModelScope.launch(Dispatchers.IO) {
                     launch {
                         try {
-                            val reader = BufferedReader(InputStreamReader(process!!.inputStream, Charsets.UTF_8))
+                            val reader = BufferedReader(InputStreamReader(proc.inputStream, Charsets.UTF_8))
                             while (isActive) {
                                 val line = reader.readLine() ?: break
                                 appendLine(TerminalLine(stripAnsi(line), LineType.OUTPUT))
                             }
-                        } catch (_: Exception) {}
+                        } catch (e: Exception) {
+                            appendLine(TerminalLine("Output reader error: ${e.message}", LineType.ERROR))
+                        }
                     }
                     launch {
                         try {
-                            val reader = BufferedReader(InputStreamReader(process!!.errorStream, Charsets.UTF_8))
+                            val reader = BufferedReader(InputStreamReader(proc.errorStream, Charsets.UTF_8))
                             while (isActive) {
                                 val line = reader.readLine() ?: break
                                 appendLine(TerminalLine(stripAnsi(line), LineType.ERROR))
                             }
-                        } catch (_: Exception) {}
+                        } catch (e: Exception) {
+                            appendLine(TerminalLine("Error reader error: ${e.message}", LineType.ERROR))
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -161,20 +166,26 @@ class TerminalViewModel @Inject constructor(
 
     fun sendCtrlC() {
         viewModelScope.launch(Dispatchers.IO) {
-            try { writer?.write("\u0003"); writer?.flush() } catch (_: Exception) {}
+            try { writer?.write("\u0003"); writer?.flush() } catch (e: Exception) {
+                appendLine(TerminalLine("Ctrl+C failed: ${e.message}", LineType.ERROR))
+            }
         }
         appendLine(TerminalLine("^C", LineType.SYSTEM))
     }
 
     fun sendCtrlD() {
         viewModelScope.launch(Dispatchers.IO) {
-            try { writer?.write("\u0004"); writer?.flush() } catch (_: Exception) {}
+            try { writer?.write("\u0004"); writer?.flush() } catch (e: Exception) {
+                appendLine(TerminalLine("Ctrl+D failed: ${e.message}", LineType.ERROR))
+            }
         }
     }
 
     fun sendTab() {
         viewModelScope.launch(Dispatchers.IO) {
-            try { writer?.write("\t"); writer?.flush() } catch (_: Exception) {}
+            try { writer?.write("\t"); writer?.flush() } catch (e: Exception) {
+                appendLine(TerminalLine("Tab completion failed: ${e.message}", LineType.ERROR))
+            }
         }
     }
 
@@ -254,6 +265,11 @@ class TerminalViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         readerJob?.cancel()
-        try { writer?.close(); process?.destroy() } catch (_: Exception) {}
+        try {
+            writer?.close()
+            process?.destroyForcibly()
+        } catch (e: Exception) {
+            // Log error in production
+        }
     }
 }

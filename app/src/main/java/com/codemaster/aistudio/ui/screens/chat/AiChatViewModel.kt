@@ -275,4 +275,10 @@ class AiChatViewModel @Inject constructor(
     }
 
     fun clearHistory() { viewModelScope.launch { chatRepository.clearMessagesForProject(currentProjectId) } }
+
+    override fun onCleared() {
+        super.onCleared()
+        autoSaveJobs.values.forEach { it.cancel() }
+        autoSaveJobs.clear()
+    }
 }

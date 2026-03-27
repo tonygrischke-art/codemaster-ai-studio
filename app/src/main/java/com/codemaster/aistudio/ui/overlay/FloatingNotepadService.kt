@@ -39,8 +39,8 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 
 class FloatingNotepadService : Service(), LifecycleOwner, SavedStateRegistryOwner {
-    private lateinit var windowManager: WindowManager
-    private lateinit var floatingView: android.view.View
+    private var windowManager: WindowManager? = null
+    private var floatingView: android.view.View? = null
     private val lifecycleRegistry = LifecycleRegistry(this)
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
     override val lifecycle: Lifecycle get() = lifecycleRegistry
@@ -55,6 +55,7 @@ class FloatingNotepadService : Service(), LifecycleOwner, SavedStateRegistryOwne
         isRunning = true
     }
     private fun showFloatingNotepad() {
+        val wm = windowManager ?: return
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -65,18 +66,22 @@ class FloatingNotepadService : Service(), LifecycleOwner, SavedStateRegistryOwne
         val composeView = ComposeView(this).apply {
             setViewTreeLifecycleOwner(this@FloatingNotepadService)
             setViewTreeSavedStateRegistryOwner(this@FloatingNotepadService)
-            setContent { FloatingNotepadContent(windowManager, params, this) { stopSelf() } }
+            setContent { FloatingNotepadContent(wm, params, this) { stopSelf() } }
         }
         floatingView = composeView
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
         lifecycleRegistry.currentState = Lifecycle.State.RESUMED
-        windowManager.addView(floatingView, params)
+        wm.addView(composeView, params)
     }
     override fun onDestroy() {
         super.onDestroy()
         isRunning = false
         lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
-        if (::floatingView.isInitialized) windowManager.removeView(floatingView)
+        floatingView?.let { view ->
+            windowManager?.removeView(view)
+        }
+        floatingView = null
+        windowManager = null
     }
     override fun onBind(intent: Intent?): IBinder? = null
 }

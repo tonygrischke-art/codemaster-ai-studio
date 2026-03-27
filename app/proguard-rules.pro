@@ -17,3 +17,39 @@
 # Keep Hilt
 -keep class dagger.hilt.** { *; }
 -keep class javax.inject.** { *; }
+
+# Kotlin Serialization
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.AnnotationsKt
+-keepclassmembers class kotlinx.serialization.json.** { *** Companion; }
+-keepclasseswithmembers class kotlinx.serialization.json.** { kotlinx.serialization.KSerializer serializer(...); }
+-keep,includedescriptorclasses class com.codemaster.aistudio.**$$serializer { *; }
+-keepclassmembers class com.codemaster.aistudio.** {
+    *** Companion;
+}
+-keepclasseswithmembers class com.codemaster.aistudio.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# Coroutines
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+-keepclassmembers class kotlinx.coroutines.** {
+    volatile <fields>;
+}
+
+# Keep WebView JavaScript interface
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+# Keep Compose
+-keep class androidx.compose.** { *; }
+-dontwarn androidx.compose.**
+
+# Keep DataStore
+-keep class androidx.datastore.** { *; }
+
+# Keep Monaco editor bridge classes
+-keep class com.codemaster.aistudio.ui.components.MonacoEditorState { *; }
+-keep class com.codemaster.aistudio.ui.components.** { *; }

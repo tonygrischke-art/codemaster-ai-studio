@@ -1,6 +1,7 @@
 package com.codemaster.aistudio.ui.components
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -20,6 +21,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import java.lang.ref.WeakReference
 import kotlin.coroutines.resume
 
 // ─── Language detection ────────────────────────────────────────
@@ -367,25 +369,27 @@ fun MonacoEditorView(
                         }
 
                         // JavaScript interface — called from Monaco JS
+                        // Use WeakReference to prevent context leak
+                        val activityRef = WeakReference(context as? Activity)
                         addJavascriptInterface(
                             object : Any() {
                                 @android.webkit.JavascriptInterface
                                 fun onReady() {
-                                    (context as? android.app.Activity)?.runOnUiThread {
+                                    activityRef.get()?.runOnUiThread {
                                         isLoading = false
                                     }
                                 }
 
                                 @android.webkit.JavascriptInterface
                                 fun onChange(newValue: String) {
-                                    (context as? android.app.Activity)?.runOnUiThread {
+                                    activityRef.get()?.runOnUiThread {
                                         onChange(newValue)
                                     }
                                 }
 
                                 @android.webkit.JavascriptInterface
                                 fun onCursor(line: Int, col: Int) {
-                                    (context as? android.app.Activity)?.runOnUiThread {
+                                    activityRef.get()?.runOnUiThread {
                                         onCursorChange(line, col)
                                     }
                                 }
