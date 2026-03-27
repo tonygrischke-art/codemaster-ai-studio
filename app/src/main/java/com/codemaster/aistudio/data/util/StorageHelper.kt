@@ -15,7 +15,6 @@ class StorageHelper @Inject constructor(
     @Nullable private val safHelper: SafHelper?
 ) {
     private val ignoredDirs = setOf(
-    private val ignoredDirs = setOf(
         ".git", "build", ".gradle", ".idea", "node_modules",
         "__pycache__", ".DS_Store", "out", "dist", ".dart_tool"
     )
