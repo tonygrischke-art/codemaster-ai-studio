@@ -14,14 +14,18 @@ env:
   JAVA_VERSION: '17'
   ANDROID_COMPILE_SDK: '35'
   ANDROID_BUILD_TOOLS: '35.0.0'
+  GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
     
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -34,7 +38,7 @@ jobs:
       uses: android-actions/setup-android@v3
     
     - name: Accept Android SDK licenses
-      run: yes | sdkmanager --licenses
+      run: yes | sdkmanager --licenses || true
     
     - name: Install Android SDK components
       run: sdkmanager "platforms;android-${{ env.ANDROID_COMPILE_SDK }}" "build-tools;${{ env.ANDROID_BUILD_TOOLS }}"
@@ -55,34 +59,36 @@ jobs:
         fi
     
     - name: Build Debug APK
-      run: ./gradlew assembleDebug --no-daemon
+      run: ./gradlew assembleDebug --no-daemon --no-build-cache --rerun-tasks
     
     - name: Upload Debug APK
       if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: CodeMaster-Debug-APK
+        name: CodeMaster-Debug-APK-${{ github.run_id }}
         path: app/build/outputs/apk/debug/app-debug.apk
+        retention-days: 7
     
     - name: Build Summary
+      if: always()
       run: |
         echo "## Build Results" >> $GITHUB_STEP_SUMMARY
         echo "| Item | Status |" >> $GITHUB_STEP_SUMMARY
         echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
-        if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
-          echo "| Debug APK | :white_check_mark: |" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "| Debug APK | :x: |" >> $GITHUB_STEP_SUMMARY
-        fi
+        echo "| Debug APK | ${{ steps.build.outcome == 'success' && ':white_check_mark:' || ':x:' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Workflow | [${{ github.workflow }} #${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> $GITHUB_STEP_SUMMARY
 
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
     
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -95,7 +101,7 @@ jobs:
       uses: android-actions/setup-android@v3
     
     - name: Accept Android SDK licenses
-      run: yes | sdkmanager --licenses
+      run: yes | sdkmanager --licenses || true
     
     - name: Install Android SDK components
       run: sdkmanager "platforms;android-${{ env.ANDROID_COMPILE_SDK }}" "build-tools;${{ env.ANDROID_BUILD_TOOLS }}"
@@ -116,14 +122,15 @@ jobs:
         if [ -n "$KEYSTORE" ]; then
           echo "$KEYSTORE" | base64 -d > release.keystore
         fi
-        ./gradlew assembleRelease --no-daemon
+        ./gradlew assembleRelease --no-daemon --no-build-cache
     
     - name: Upload Release APK
       if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: CodeMaster-Release-APK
+        name: CodeMaster-Release-APK-${{ github.run_id }}
         path: app/build/outputs/apk/release/app-release.apk
+        retention-days: 30
     
     - name: Create GitHub Release
       if: env.KEYSTORE != ''
