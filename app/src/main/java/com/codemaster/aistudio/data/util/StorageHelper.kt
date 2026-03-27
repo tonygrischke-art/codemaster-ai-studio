@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.os.Environment
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.annotation.Nullable
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -11,8 +12,9 @@ import javax.inject.Singleton
 @Singleton
 class StorageHelper @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val safHelper: SafHelper
+    @Nullable private val safHelper: SafHelper?
 ) {
+    private val ignoredDirs = setOf(
     private val ignoredDirs = setOf(
         ".git", "build", ".gradle", ".idea", "node_modules",
         "__pycache__", ".DS_Store", "out", "dist", ".dart_tool"
@@ -59,7 +61,7 @@ class StorageHelper @Inject constructor(
             ))
         }
         
-        if (safHelper.hasPersistedAccess()) {
+        if (safHelper?.hasPersistedAccess() == true) {
             val rootName = safHelper.getRootDisplayName() ?: "External Storage"
             locations.add(StorageLocation(
                 name = rootName,
@@ -84,7 +86,7 @@ class StorageHelper @Inject constructor(
     }
     
     fun getSafLocation(): StorageLocation? {
-        if (!safHelper.hasPersistedAccess()) return null
+        if (safHelper?.hasPersistedAccess() != true) return null
         return StorageLocation(
             name = safHelper.getRootDisplayName() ?: "External",
             path = "saf://root",
@@ -95,7 +97,7 @@ class StorageHelper @Inject constructor(
         )
     }
     
-    fun isUsingSaf(): Boolean = safHelper.hasPersistedAccess()
+    fun isUsingSaf(): Boolean = safHelper?.hasPersistedAccess() == true
     
     fun ensureDirectoryExists(path: String): Boolean {
         return try {

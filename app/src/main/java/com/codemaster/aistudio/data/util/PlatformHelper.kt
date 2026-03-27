@@ -8,13 +8,14 @@ import android.provider.DocumentsContract
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.runBlocking
 import java.io.File
+import javax.annotation.Nullable
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class PlatformHelper @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val safHelper: SafHelper
+    @Nullable private val safHelper: SafHelper?
 ) {
     companion object {
         private const val TERMUX_PREFIX = "/data/data/com.termux/files"
@@ -31,20 +32,20 @@ class PlatformHelper @Inject constructor(
 
     val homeDirectory: String
         get() = when {
-            safHelper.hasPersistedAccess() -> "saf://root"
+            safHelper?.hasPersistedAccess() == true -> "saf://root"
             isTermuxAvailable -> TERMUX_HOME
             else -> context.filesDir.absolutePath
         }
 
     val documentsDirectory: String
         get() = when {
-            safHelper.hasPersistedAccess() -> "saf://root"
+            safHelper?.hasPersistedAccess() == true -> "saf://root"
             isTermuxAvailable -> "$TERMUX_HOME/Documents"
             else -> context.getExternalFilesDir(null)?.absolutePath ?: "${context.filesDir.absolutePath}/Documents"
         }
 
     val isUsingSaf: Boolean
-        get() = safHelper.hasPersistedAccess()
+        get() = safHelper?.hasPersistedAccess() == true
 
     val gitBinary: String?
         get() = when {
@@ -77,7 +78,7 @@ class PlatformHelper @Inject constructor(
     }
 
     fun createProjectDirectory(projectName: String): String {
-        return if (safHelper.hasPersistedAccess()) {
+        return if (safHelper?.hasPersistedAccess() == true) {
             "saf://root/$projectName"
         } else {
             val baseDir = documentsDirectory

@@ -23,8 +23,7 @@ data class GitStatus(
 class GitRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
-    private val platformHelper: PlatformHelper,
-    private val safHelper: SafHelper
+    private val platformHelper: PlatformHelper
 ) {
     private fun findGitBinary(): String? = platformHelper.gitBinary
 

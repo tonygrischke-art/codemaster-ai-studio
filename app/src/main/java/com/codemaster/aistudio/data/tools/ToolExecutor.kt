@@ -12,6 +12,7 @@ import kotlinx.coroutines.runBlocking
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
+import javax.annotation.Nullable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,7 +22,7 @@ class ToolExecutor @Inject constructor(
     private val fsRepository: FileSystemRepository,
     private val gitRepository: GitRepository,
     private val platformHelper: PlatformHelper,
-    private val safHelper: SafHelper
+    @Nullable private val safHelper: SafHelper?
 ) {
     private var currentProjectPath: String = ""
     
@@ -85,7 +86,7 @@ class ToolExecutor @Inject constructor(
             val parts = path.removePrefix("saf://").split("/")
             val dirName = parts.last()
             val parentDocId = if (parts.size > 1) parts.dropLast(1).joinToString("/") else ""
-            safHelper.createDirectory(parentDocId, dirName).fold(
+            safHelper?.createDirectory(parentDocId, dirName).fold(
                 onSuccess = { ToolResult(true, "Directory created: $path") },
                 onFailure = { ToolResult(false, "", it.message ?: "Failed to create directory") }
             )

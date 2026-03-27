@@ -127,6 +127,8 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     // Zip support for project export
     implementation("org.apache.commons:commons-compress:1.26.1")
+    // DocumentFile for SAF
+    implementation("androidx.documentfile:documentfile:1.0.1")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

@@ -8,6 +8,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import javax.annotation.Nullable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,7 +28,7 @@ data class DiskFile(
 @Singleton
 class FileSystemRepository @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val safHelper: SafHelper
+    @Nullable private val safHelper: SafHelper?
 ) {
     private val ignoredDirs = setOf(
         ".git", "build", ".gradle", ".idea", "node_modules",
@@ -47,7 +48,7 @@ class FileSystemRepository @Inject constructor(
         "toml", "properties", "sql", "graphql", "proto"
     )
 
-    fun isUsingSaf(): Boolean = safHelper.hasPersistedAccess()
+    fun isUsingSaf(): Boolean = safHelper?.hasPersistedAccess() == true
 
     suspend fun scanDirectory(rootPath: String, maxDepth: Int = 6): Result<List<DiskFile>> =
         withContext(Dispatchers.IO) {
@@ -70,7 +71,7 @@ class FileSystemRepository @Inject constructor(
 
     private suspend fun scanSafDirectory(maxDepth: Int): Result<List<DiskFile>> {
         return try {
-            val files = safHelper.scanDirectory("", maxDepth)
+            val files = safHelper?.scanDirectory("", maxDepth)
             val diskFiles = files.map { safFileToDiskFile(it, "") }
             Result.success(diskFiles)
         } catch (e: Exception) {
@@ -124,7 +125,7 @@ class FileSystemRepository @Inject constructor(
     suspend fun readFile(path: String): Result<String> = withContext(Dispatchers.IO) {
         if (path.startsWith("saf://")) {
             val docId = path.removePrefix("saf://")
-            return@withContext safHelper.readFile(docId)
+            return@withContext safHelper?.readFile(docId)
         }
         
         try {
@@ -140,7 +141,7 @@ class FileSystemRepository @Inject constructor(
     suspend fun writeFile(path: String, content: String): Result<Unit> = withContext(Dispatchers.IO) {
         if (path.startsWith("saf://")) {
             val docId = path.removePrefix("saf://")
-            return@withContext safHelper.writeFile(docId, content)
+            return@withContext safHelper?.writeFile(docId, content)
         }
         
         try {
@@ -157,7 +158,7 @@ class FileSystemRepository @Inject constructor(
         if (dirPath.startsWith("saf://")) {
             val parentDocId = dirPath.removePrefix("saf://")
             val mimeType = getMimeType(fileName)
-            return@withContext safHelper.createFile(parentDocId, fileName, mimeType).map { "saf://${it.docId}" }
+            return@withContext safHelper?.createFile(parentDocId, fileName, mimeType).map { "saf://${it.docId}" }
         }
         
         try {
@@ -173,7 +174,7 @@ class FileSystemRepository @Inject constructor(
     suspend fun createDirectory(dirPath: String, dirName: String): Result<String> = withContext(Dispatchers.IO) {
         if (dirPath.startsWith("saf://")) {
             val parentDocId = dirPath.removePrefix("saf://")
-            return@withContext safHelper.createDirectory(parentDocId, dirName).map { "saf://${it.docId}" }
+            return@withContext safHelper?.createDirectory(parentDocId, dirName).map { "saf://${it.docId}" }
         }
         
         try {
@@ -188,7 +189,7 @@ class FileSystemRepository @Inject constructor(
     suspend fun deleteFile(path: String): Result<Unit> = withContext(Dispatchers.IO) {
         if (path.startsWith("saf://")) {
             val docId = path.removePrefix("saf://")
-            return@withContext safHelper.deleteFile(docId)
+            return@withContext safHelper?.deleteFile(docId)
         }
         
         try { File(path).delete(); Result.success(Unit) }
@@ -198,7 +199,7 @@ class FileSystemRepository @Inject constructor(
     suspend fun listFiles(dirPath: String): Result<List<DiskFile>> = withContext(Dispatchers.IO) {
         if (dirPath.startsWith("saf://")) {
             val docId = dirPath.removePrefix("saf://")
-            val files = safHelper.listFiles(docId)
+            val files = safHelper?.listFiles(docId)
             return@withContext Result.success(files.map { safFileToDiskFile(it, dirPath) })
         }
         
