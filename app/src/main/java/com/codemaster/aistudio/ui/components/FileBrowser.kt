@@ -132,7 +132,7 @@ fun FileBrowserDialog(
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            error!!,
+                            error,
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall
                         )

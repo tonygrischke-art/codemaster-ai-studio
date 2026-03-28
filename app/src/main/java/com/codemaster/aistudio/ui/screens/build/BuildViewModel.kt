@@ -117,10 +117,11 @@ class BuildViewModel @Inject constructor(
                     BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
                         var line: String?
                         while (reader.readLine().also { line = it } != null) {
-                            val l = line!!
-                            addLog(l)
-                            if (l.contains("error:", ignoreCase = true) || l.contains("FAILED") || l.contains("Exception")) {
-                                errors.add(l)
+                            line?.let { l ->
+                                addLog(l)
+                                if (l.contains("error:", ignoreCase = true) || l.contains("FAILED") || l.contains("Exception")) {
+                                    errors.add(l)
+                                }
                             }
                         }
                     }
