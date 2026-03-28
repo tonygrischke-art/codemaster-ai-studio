@@ -158,7 +158,7 @@ class FileSystemRepository @Inject constructor(
         if (dirPath.startsWith("saf://")) {
             val parentDocId = dirPath.removePrefix("saf://")
             val mimeType = getMimeType(fileName)
-            return@withContext safHelper?.createFile(parentDocId, fileName, mimeType).map { "saf://${it.docId}" }
+            return@withContext (safHelper?.createFile(parentDocId, fileName, mimeType) ?: Result.failure(Exception("SAF not available"))).map { "saf://${it.docId}" }
         }
         
         try {
@@ -174,7 +174,7 @@ class FileSystemRepository @Inject constructor(
     suspend fun createDirectory(dirPath: String, dirName: String): Result<String> = withContext(Dispatchers.IO) {
         if (dirPath.startsWith("saf://")) {
             val parentDocId = dirPath.removePrefix("saf://")
-            return@withContext safHelper?.createDirectory(parentDocId, dirName).map { "saf://${it.docId}" }
+            return@withContext (safHelper?.createDirectory(parentDocId, dirName) ?: Result.failure(Exception("SAF not available"))).map { "saf://${it.docId}" }
         }
         
         try {
