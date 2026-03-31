@@ -651,3 +651,23 @@ def create_readme_fixes():
 ./gradlew clean
 ./gradlew assembleDebug
 adb install app/build/outputs/apk/debug/app-debug.apk
+```
+"""
+    return write_file(ROOT_DIR / "SECURITY_FIXES.md", readme)
+
+def create_backup_script():
+    """Create backup script"""
+    backup_script = '''#!/bin/bash
+    TIMESTAMP=$(date +%s)
+    mkdir -p "backup_$TIMESTAMP"
+    cp -r app/src/main/java backup_$TIMESTAMP/
+    '''
+    return write_file(ROOT_DIR / "backup.sh", backup_script)
+
+if __name__ == "__main__":
+    print("Starting CodeMaster AI Studio fixes...")
+    create_security_fixes()
+    create_readme_fixes()
+    create_backup_script()
+    print("All fixes applied!")
+
