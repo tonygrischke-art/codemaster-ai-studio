@@ -3,9 +3,11 @@
 
     <!-- Network -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Storage - legacy -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
 
     <!-- Storage - modern (SAF, no permission needed) -->
     <!-- MANAGE_EXTERNAL_STORAGE removed - using SAF instead -->
@@ -18,6 +20,31 @@
 
     <!-- Microphone for voice input -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Foreground service for floating notepad -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- Overlay permission for floating notepad -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Wake lock for keeping operations running -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Vibration for feedback -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Post notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Receive boot completed for starting services -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Bind to external service -->
+    <uses-permission android:name="android.permission.BIND_EXTERNAL_SERVICE" />
+
+    <!-- Query all packages for app selection -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <application
         android:name=".CodeMasterApp"
@@ -41,6 +68,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Floating Notepad Service -->
+        <service
+            android:name=".ui.overlay.FloatingNotepadService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating_notepad_overlay" />
+        </service>
 
         <!-- FileProvider for APK installation -->
         <provider
