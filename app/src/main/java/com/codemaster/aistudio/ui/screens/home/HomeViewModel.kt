@@ -482,9 +482,9 @@ const styles = StyleSheet.create({
             """.trimIndent()
             "Python Script" -> """
 #!/usr/bin/env python3
-"""
+'''
 Python Script Template
-"""
+'''
 
 def main():
     print("Hello Python!")
