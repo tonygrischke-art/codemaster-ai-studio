@@ -100,7 +100,8 @@ fun HomeScreen(
             }
         }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Column(modifier = Modifier.fillMaxSize()) {
             // Top bar with recent projects, terminal/upload, and export buttons
             TopActionBar(
                 onRecentProjects = { viewModel.showRecentProjectsDialog(context) },
@@ -256,6 +257,7 @@ fun HomeScreen(
                 action = { TextButton(onClick = { viewModel.clearError() }) { Text("Dismiss") } }
             ) { Text(error) }
         }
+        } // end Box
     }
 }
 
@@ -335,6 +337,7 @@ fun TopActionBar(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainCodeField(
     code: String,

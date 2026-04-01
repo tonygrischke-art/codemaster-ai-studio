@@ -337,7 +337,7 @@ fun FloatingNotepadContent(windowManager: WindowManager, params: WindowManager.L
                         .pointerInput(Unit) {
                             detectTapGestures(
                                 onPress = {
-                                    val startY = it
+                                    val startY = it.y
                                     try {
                                         awaitPointerEventScope {
                                             while (true) {
