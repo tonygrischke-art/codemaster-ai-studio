@@ -44,15 +44,18 @@ class SafHelper @Inject constructor(
         }
 
     fun hasPersistedAccess(): Boolean {
-        return persistedUri?.let { uri ->
-            try {
-                context.contentResolver.openInputStream(uri)?.close()
-                true
-            } catch (e: Exception) {
-                Log.w(TAG, "Persisted URI no longer valid: $uri")
-                false
-            }
-        } ?: false
+        val uri = persistedUri ?: return false
+        // Tree URIs cannot be opened as streams - check the persisted grants table instead
+        val granted = context.contentResolver.persistedUriPermissions.any { permission ->
+            permission.uri == uri &&
+            permission.isReadPermission &&
+            permission.isWritePermission
+        }
+        if (!granted) {
+            Log.w(TAG, "No persisted permission found for URI: $uri — clearing saved URI")
+            persistedUri = null
+        }
+        return granted
     }
 
     fun getDocumentFile(): DocumentFile? {
@@ -86,12 +89,21 @@ class SafHelper @Inject constructor(
         }
     }
 
-    fun takePersistablePermission(uri: Uri) {
-        try {
+    fun takePersistablePermission(uri: Uri): Boolean {
+        return try {
             val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+            // Verify the grant actually landed
+            val confirmed = context.contentResolver.persistedUriPermissions.any { perm ->
+                perm.uri == uri && perm.isReadPermission && perm.isWritePermission
+            }
+            if (!confirmed) {
+                Log.e(TAG, "takePersistableUriPermission did not result in a persisted grant for $uri")
+            }
+            confirmed
         } catch (e: Exception) {
             Log.e(TAG, "Failed to take persistable permission for $uri", e)
+            false
         }
     }
 
@@ -107,9 +119,15 @@ class SafHelper @Inject constructor(
         persistedUri = null
     }
 
-    fun onDirectoryPicked(uri: Uri) {
-        persistedUri = uri
-        takePersistablePermission(uri)
+    fun onDirectoryPicked(uri: Uri): Boolean {
+        // Take the permission FIRST — only store URI if the grant was confirmed
+        persistedUri = uri  // temporarily store so hasPersistedAccess() can validate
+        val granted = takePersistablePermission(uri)
+        if (!granted) {
+            Log.e(TAG, "Permission not granted for $uri — not persisting URI")
+            persistedUri = null
+        }
+        return granted
     }
 
     suspend fun listFiles(subPath: String = ""): List<SafFile> = withContext(Dispatchers.IO) {
@@ -163,7 +181,8 @@ class SafHelper @Inject constructor(
 
     suspend fun readFile(docId: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val uri = DocumentsContract.buildDocumentUriUsingTree(persistedUri, docId)
+            val rootUri = persistedUri ?: return@withContext Result.failure(Exception("No directory selected"))
+            val uri = DocumentsContract.buildDocumentUriUsingTree(rootUri, docId)
             context.contentResolver.openInputStream(uri)?.use { input ->
                 BufferedReader(InputStreamReader(input)).use { reader ->
                     Result.success(reader.readText())
@@ -176,7 +195,8 @@ class SafHelper @Inject constructor(
 
     suspend fun writeFile(docId: String, content: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val uri = DocumentsContract.buildDocumentUriUsingTree(persistedUri, docId)
+            val rootUri = persistedUri ?: return@withContext Result.failure(Exception("No directory selected"))
+            val uri = DocumentsContract.buildDocumentUriUsingTree(rootUri, docId)
             context.contentResolver.openOutputStream(uri, "wt")?.use { output ->
                 OutputStreamWriter(output).use { writer ->
                     writer.write(content)
@@ -246,7 +266,8 @@ class SafHelper @Inject constructor(
 
     suspend fun deleteFile(docId: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val uri = DocumentsContract.buildDocumentUriUsingTree(persistedUri, docId)
+            val rootUri = persistedUri ?: return@withContext Result.failure(Exception("No directory selected"))
+            val uri = DocumentsContract.buildDocumentUriUsingTree(rootUri, docId)
             val deleted = DocumentsContract.deleteDocument(context.contentResolver, uri)
             if (deleted) Result.success(Unit)
             else Result.failure(Exception("Failed to delete"))

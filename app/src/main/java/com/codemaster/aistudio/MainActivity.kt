@@ -1,6 +1,8 @@
 package com.codemaster.aistudio
 
 import android.content.Intent
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -32,13 +34,24 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var safHelper: SafHelper
 
+    // Reactive flag — updated immediately after directory pick, no recreate() needed
+    private var hasDirectoryAccess = mutableStateOf(false)
+
     private val directoryPickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) {
             result.data?.data?.let { uri ->
-                safHelper.onDirectoryPicked(uri)
-                recreate()
+                val granted = safHelper.onDirectoryPicked(uri)
+                if (granted) {
+                    hasDirectoryAccess.value = true
+                } else {
+                    android.widget.Toast.makeText(
+                        this,
+                        "Directory permission was not granted. Please try again.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
     }
@@ -47,11 +60,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val hasAccess = safHelper.hasPersistedAccess()
+        // Initialise the reactive flag from persisted state
+        hasDirectoryAccess.value = safHelper.hasPersistedAccess()
 
         setContent {
             val settingsViewModel: SettingsViewModel = hiltViewModel()
             val settingsState by settingsViewModel.uiState.collectAsState()
+            val hasAccess by hasDirectoryAccess
 
             CodeMasterTheme(darkTheme = settingsState.isDarkTheme) {
                 if (hasAccess) {
