@@ -1,6 +1,9 @@
 package com.codemaster.aistudio.ui.components
 
 import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -18,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.codemaster.aistudio.data.util.SafHelper
 import com.codemaster.aistudio.data.util.StorageHelper
 import java.io.File
 
@@ -26,13 +30,26 @@ import java.io.File
 fun FileBrowserDialog(
     startPath: String? = null,
     onPathSelected: (String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    safHelper: SafHelper? = null
 ) {
     val context = LocalContext.current
     val storageHelper = remember { StorageHelper(context, null) }
     
     val defaultLocation = remember { storageHelper.getDefaultLocation() }
     val availableLocations = remember { storageHelper.getAvailableLocations() }
+    
+    var selectedSafPath by remember { mutableStateOf<String?>(null) }
+    
+    val documentPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.let {
+            if (safHelper != null && safHelper.onDirectoryPicked(it)) {
+                selectedSafPath = safHelper.getRootDisplayName() ?: "Selected Folder"
+            }
+        }
+    }
     
     var currentPath by remember { mutableStateOf(startPath ?: defaultLocation.path)}
     var entries by remember { mutableStateOf(listOf<File>()) }
@@ -102,6 +119,48 @@ fun FileBrowserDialog(
                             )
                         )
                     }
+                }
+                
+                Spacer(Modifier.height(8.dp))
+                
+                if (safHelper != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { documentPickerLauncher.launch(safHelper.createDocumentPickerIntent()) },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.Storage, null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Browse All Storage", style = MaterialTheme.typography.labelSmall)
+                        }
+                        
+                        if (selectedSafPath != null) {
+                            SuggestionChip(
+                                onClick = { onPathSelected("saf://${selectedSafPath}") },
+                                label = { 
+                                    Text(
+                                        selectedSafPath ?: "",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
+                                icon = { Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary) },
+                                colors = SuggestionChipDefaults.suggestionChipColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                                )
+                            )
+                        }
+                    }
+                    
+                    Spacer(Modifier.height(8.dp))
+                    HorizontalDivider()
+                    Spacer(Modifier.height(4.dp))
                 }
                 
                 if (currentPath != selectedPath) {

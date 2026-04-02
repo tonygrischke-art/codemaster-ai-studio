@@ -14,6 +14,7 @@ import com.codemaster.aistudio.data.repository.FileSystemRepository
 import com.codemaster.aistudio.data.repository.ProjectRepository
 import com.codemaster.aistudio.data.repository.SettingsRepository
 import com.codemaster.aistudio.data.util.PlatformHelper
+import com.codemaster.aistudio.data.util.SafHelper
 import com.codemaster.aistudio.ui.overlay.FloatingNotepadService
 import com.codemaster.aistudio.ui.base.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -63,6 +64,7 @@ class HomeViewModel @Inject constructor(
     private val aiRepository: AiRepository,
     private val settingsRepository: SettingsRepository,
     private val platformHelper: PlatformHelper,
+    val safHelper: SafHelper,
     @ApplicationContext private val context: Context
 ) : BaseViewModel() {
 

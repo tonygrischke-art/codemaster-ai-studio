@@ -220,7 +220,8 @@ fun HomeScreen(
                     viewModel.hideFileBrowserDialog()
                     viewModel.showImportDialog()
                 },
-                onDismiss = { viewModel.hideFileBrowserDialog() }
+                onDismiss = { viewModel.hideFileBrowserDialog() },
+                safHelper = viewModel.safHelper
             )
         }
 
