@@ -16,6 +16,7 @@ import com.codemaster.aistudio.data.dao.ProjectDao
 import com.codemaster.aistudio.data.dao.SnippetDao
 import com.codemaster.aistudio.data.migration.DatabaseMigrations
 import com.codemaster.aistudio.data.repository.FileSystemRepository
+import com.codemaster.aistudio.data.terminal.EmbeddedEnvironment
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -98,4 +99,8 @@ object AppModule {
     @Provides @Singleton
     fun provideKimiApiService(@Named("kimi") retrofit: Retrofit): KimiApiService =
         retrofit.create(KimiApiService::class.java)
+
+    @Provides @Singleton
+    fun provideEmbeddedEnvironment(@ApplicationContext context: Context): EmbeddedEnvironment =
+        EmbeddedEnvironment(context)
 }

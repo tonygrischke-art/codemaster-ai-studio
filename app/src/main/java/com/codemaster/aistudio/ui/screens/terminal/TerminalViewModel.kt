@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.codemaster.aistudio.data.util.PlatformHelper
 import com.codemaster.aistudio.data.util.SafHelper
+import com.codemaster.aistudio.data.terminal.EmbeddedEnvironment
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +40,8 @@ data class TerminalUiState(
 class TerminalViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val platformHelper: PlatformHelper,
-    private val safHelper: SafHelper
+    private val safHelper: SafHelper,
+    private val embeddedEnv: EmbeddedEnvironment
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TerminalUiState())
@@ -51,9 +53,7 @@ class TerminalViewModel @Inject constructor(
     private val maxLines = 2000
 
     private fun buildShellCommand(): List<String> {
-        return platformHelper.bashBinary?.let { bash ->
-            listOf(bash)
-        } ?: listOf("/system/bin/sh")
+        return embeddedEnv.shellCommand()
     }
 
     fun init(projectId: Long) {

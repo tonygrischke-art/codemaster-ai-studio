@@ -15,6 +15,7 @@ import com.codemaster.aistudio.ui.screens.preview.PreviewScreen
 import com.codemaster.aistudio.ui.screens.settings.SettingsScreen
 import com.codemaster.aistudio.ui.screens.snippets.SnippetScreen
 import com.codemaster.aistudio.ui.screens.terminal.TerminalScreen
+import com.codemaster.aistudio.ui.screens.terminal.EmbeddedSetupScreen
 
 sealed class Screen(val route: String) {
     object Home     : Screen("home")
@@ -24,6 +25,7 @@ sealed class Screen(val route: String) {
     object Editor   : Screen("editor/{projectId}/{fileId}") { fun createRoute(pid: Long, fid: Long = -1L) = "editor/$pid/$fid" }
     object Build    : Screen("build/{projectId}")         { fun createRoute(id: Long = -1L) = "build/$id" }
     object Terminal : Screen("terminal/{projectId}")      { fun createRoute(id: Long = -1L) = "terminal/$id" }
+    object TerminalSetup : Screen("terminal_setup/{projectId}") { fun createRoute(id: Long = -1L) = "terminal_setup/$id" }
     object Git      : Screen("git/{projectId}")           { fun createRoute(id: Long = -1L) = "git/$id" }
     object Preview  : Screen("preview/{projectId}")       { fun createRoute(id: Long = -1L) = "preview/$id" }
 }
@@ -37,7 +39,7 @@ fun NavGraph(navController: NavHostController) {
                 onOpenChat      = { navController.navigate(Screen.Chat.createRoute(it)) },
                 onOpenEditor    = { navController.navigate(Screen.Editor.createRoute(it)) },
                 onOpenBuild     = { navController.navigate(Screen.Build.createRoute(it)) },
-                onOpenTerminal  = { navController.navigate(Screen.Terminal.createRoute(it)) },
+                onOpenTerminal  = { navController.navigate(Screen.TerminalSetup.createRoute(it)) },
                 onOpenGit       = { navController.navigate(Screen.Git.createRoute(it)) },
                 onOpenSnippets  = { navController.navigate(Screen.Snippets.route) },
                 onOpenSettings  = { navController.navigate(Screen.Settings.route) }
@@ -70,7 +72,7 @@ fun NavGraph(navController: NavHostController) {
                 fileId         = back.arguments?.getLong("fileId") ?: -1L,
                 onBack         = { navController.popBackStack() },
                 onOpenChat     = { navController.navigate(Screen.Chat.createRoute(it)) },
-                onOpenTerminal = { navController.navigate(Screen.Terminal.createRoute(it)) }
+                onOpenTerminal = { navController.navigate(Screen.TerminalSetup.createRoute(it)) }
             )
         }
 
@@ -95,6 +97,18 @@ fun NavGraph(navController: NavHostController) {
         ) { back ->
             TerminalScreen(
                 projectId = back.arguments?.getLong("projectId") ?: -1L,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            Screen.TerminalSetup.route,
+            arguments = listOf(navArgument("projectId") { type = NavType.LongType; defaultValue = -1L })
+        ) { back ->
+            val projectId = back.arguments?.getLong("projectId") ?: -1L
+            EmbeddedSetupScreen(
+                projectId = projectId,
+                onComplete = { navController.navigate(Screen.Terminal.createRoute(projectId)) { popUpTo(Screen.TerminalSetup.route) { inclusive = true } } },
                 onBack = { navController.popBackStack() }
             )
         }
