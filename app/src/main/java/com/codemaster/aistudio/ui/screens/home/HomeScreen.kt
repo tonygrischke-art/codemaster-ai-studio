@@ -558,9 +558,9 @@ fun ActionButton(
         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
         shape = RoundedCornerShape(8.dp)
     ) {
-        Icon(icon, null, modifier = Modifier.size(14.dp))
+        Icon(icon, null, modifier = Modifier.size(14.dp), tint = Color.White)
         Spacer(Modifier.width(4.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, color = Color.White)
     }
 }
 
@@ -599,9 +599,9 @@ fun TemplateBuilderSection(
                     FilterChip(
                         selected = currentTemplate == template.name,
                         onClick = { onUseTemplate(template) },
-                        label = { Text(template.name, style = MaterialTheme.typography.labelSmall) },
+                        label = { Text(template.name, style = MaterialTheme.typography.labelSmall, color = Color.White) },
                         leadingIcon = {
-                            Icon(template.icon, null, modifier = Modifier.size(14.dp))
+                            Icon(template.icon, null, modifier = Modifier.size(14.dp), tint = Color.White)
                         }
                     )
                 }
