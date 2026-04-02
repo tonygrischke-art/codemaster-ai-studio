@@ -71,7 +71,7 @@ class MainActivity : ComponentActivity() {
             CodeMasterTheme(darkTheme = settingsState.isDarkTheme) {
                 if (hasAccess) {
                     val navController = rememberNavController()
-                    NavGraph(navController = navController)
+                    NavGraph(navController = navController, safHelper = safHelper)
                 } else {
                     PermissionScreen(
                         onSelectDirectory = { launchDirectoryPicker() }

@@ -10,41 +10,53 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-data class EmbeddedSetupUiState(
-    val isInstalling: Boolean = false,
-    val isReady: Boolean = false,
-    val statusMessage: String = "",
-    val error: String? = null
+data class SetupUiState(
+    val label:    String  = "Preparing...",
+    val progress: Int     = 0,
+    val isDone:   Boolean = false,
+    val isFailed: Boolean = false,
+    val error:    String? = null
 )
 
 @HiltViewModel
 class EmbeddedSetupViewModel @Inject constructor(
-    private val embeddedEnv: EmbeddedEnvironment
+    private val env: EmbeddedEnvironment
 ) : ViewModel() {
-    
-    private val _uiState = MutableStateFlow(EmbeddedSetupUiState())
-    val uiState: StateFlow<EmbeddedSetupUiState> = _uiState.asStateFlow()
-    
-    fun init() {
-        if (embeddedEnv.isReady) {
-            _uiState.value = EmbeddedSetupUiState(isReady = true)
+
+    private val _uiState = MutableStateFlow(SetupUiState())
+    val uiState: StateFlow<SetupUiState> = _uiState.asStateFlow()
+
+    init {
+        if (env.isReady) {
+            _uiState.value = SetupUiState(label = "Terminal ready!", progress = 100, isDone = true)
+        } else {
+            startSetup()
         }
     }
-    
-    fun startInstallation() {
+
+    private fun startSetup() {
         viewModelScope.launch {
-            _uiState.value = EmbeddedSetupUiState(isInstalling = true, statusMessage = "Starting...")
-            try {
-                embeddedEnv.install { status ->
-                    _uiState.value = _uiState.value.copy(statusMessage = status)
+            env.setup { label, progress ->
+                if (progress == -1) {
+                    _uiState.value = SetupUiState(
+                        label    = label,
+                        progress = 0,
+                        isFailed = true,
+                        error    = label
+                    )
+                } else {
+                    _uiState.value = SetupUiState(
+                        label    = label,
+                        progress = progress,
+                        isDone   = progress == 100
+                    )
                 }
-                _uiState.value = EmbeddedSetupUiState(isReady = true)
-            } catch (e: Exception) {
-                _uiState.value = EmbeddedSetupUiState(
-                    isInstalling = false,
-                    error = e.message ?: "Installation failed"
-                )
             }
         }
+    }
+
+    fun retry() {
+        _uiState.value = SetupUiState(label = "Retrying...", progress = 0)
+        startSetup()
     }
 }

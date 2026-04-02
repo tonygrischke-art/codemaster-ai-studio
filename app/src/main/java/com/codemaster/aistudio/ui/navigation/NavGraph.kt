@@ -16,6 +16,7 @@ import com.codemaster.aistudio.ui.screens.settings.SettingsScreen
 import com.codemaster.aistudio.ui.screens.snippets.SnippetScreen
 import com.codemaster.aistudio.ui.screens.terminal.TerminalScreen
 import com.codemaster.aistudio.ui.screens.terminal.EmbeddedSetupScreen
+import com.codemaster.aistudio.ui.screens.terminal.EmbeddedSetupScreen
 
 sealed class Screen(val route: String) {
     object Home     : Screen("home")
@@ -31,7 +32,10 @@ sealed class Screen(val route: String) {
 }
 
 @Composable
-fun NavGraph(navController: NavHostController) {
+fun NavGraph(
+    navController: NavHostController,
+    safHelper: com.codemaster.aistudio.data.util.SafHelper? = null
+) {
     NavHost(navController = navController, startDestination = Screen.Home.route) {
 
         composable(Screen.Home.route) {

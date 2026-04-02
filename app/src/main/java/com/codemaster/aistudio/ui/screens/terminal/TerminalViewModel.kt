@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.codemaster.aistudio.data.util.PlatformHelper
+import com.codemaster.aistudio.data.terminal.EmbeddedEnvironment
 import com.codemaster.aistudio.data.util.SafHelper
 import com.codemaster.aistudio.data.terminal.EmbeddedEnvironment
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -107,8 +108,12 @@ class TerminalViewModel @Inject constructor(
                 val pb = ProcessBuilder(shellCmd).apply {
                     directory(workDir)
                     environment().apply {
-                        platformHelper.buildEnvironment().forEach { (k, v) -> put(k, v) }
-                        put("LANG", "en_US.UTF-8")
+                        if (embeddedEnv.isReady) {
+                            embeddedEnv.shellEnv().forEach { (k, v) -> put(k, v) }
+                        } else {
+                            platformHelper.buildEnvironment().forEach { (k, v) -> put(k, v) }
+                            put("LANG", "en_US.UTF-8")
+                        }
                     }
                     redirectErrorStream(false)
                 }

@@ -1,148 +1,138 @@
 package com.codemaster.aistudio.ui.screens.terminal
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.codemaster.aistudio.data.terminal.EmbeddedEnvironment
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * One-time setup screen shown while Alpine Linux is being downloaded
+ * and extracted. Auto-navigates to the terminal when done.
+ */
 @Composable
 fun EmbeddedSetupScreen(
-    projectId: Long,
-    onComplete: () -> Unit,
-    onBack: () -> Unit,
+    onReady: () -> Unit,
     viewModel: EmbeddedSetupViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    
-    LaunchedEffect(projectId) {
-        viewModel.init()
+    val state by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(state.isDone) {
+        if (state.isDone) onReady()
     }
-    
-    LaunchedEffect(uiState.isReady) {
-        if (uiState.isReady) {
-            onComplete()
-        }
-    }
-    
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Terminal Setup") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, "Back")
-                    }
-                }
-            )
-        }
-    ) { padding ->
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0D1117)),
+        contentAlignment = Alignment.Center
+    ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+            modifier = Modifier.padding(32.dp)
         ) {
-            Icon(
-                Icons.Default.Terminal,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            
-            Spacer(Modifier.height(24.dp))
-            
+            Text("⚙️", fontSize = 56.sp)
+
             Text(
-                "Embedded Terminal Setup",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+                "Setting Up Terminal",
+                fontWeight = FontWeight.Bold,
+                fontSize   = 22.sp,
+                color      = Color(0xFFE6EDF3)
             )
-            
-            Spacer(Modifier.height(8.dp))
-            
+
             Text(
-                "Setting up a self-contained Alpine Linux terminal environment...",
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                "CodeMaster is installing its built-in Linux environment.\nThis only happens once.",
+                color     = Color(0xFF8B949E),
+                fontSize  = 14.sp,
+                textAlign = TextAlign.Center
             )
-            
-            Spacer(Modifier.height(32.dp))
-            
-            if (uiState.isInstalling) {
-                CircularProgressIndicator()
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    uiState.statusMessage,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+
+            // Progress bar
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                LinearProgressIndicator(
+                    progress = { (state.progress.coerceAtLeast(0)) / 100f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color      = Color(0xFF7C4DFF),
+                    trackColor = Color(0xFF21262D)
                 )
-            } else if (uiState.error != null) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            "Error",
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Text(
-                            uiState.error ?: "Unknown error",
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
+                    Text(
+                        state.label,
+                        color      = Color(0xFF58A6FF),
+                        fontSize   = 12.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    if (state.progress >= 0) {
+                        Text("${state.progress}%", color = Color(0xFF8B949E), fontSize = 12.sp)
                     }
-                }
-                Spacer(Modifier.height(16.dp))
-                Button(onClick = { viewModel.init() }) {
-                    Text("Retry")
-                }
-            } else if (uiState.isReady) {
-                Icon(
-                    Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.height(8.dp))
-                Text("Ready!", fontWeight = FontWeight.Bold)
-            } else {
-                Button(onClick = { viewModel.startInstallation() }) {
-                    Icon(Icons.Default.Download, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Install Terminal")
                 }
             }
-            
-            Spacer(Modifier.height(32.dp))
-            
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+
+            // Step checklist
+            val steps = listOf(
+                "Download proot binary"  to (state.progress >= 25),
+                "Download Alpine Linux"  to (state.progress >= 70),
+                "Extract filesystem"     to (state.progress >= 90),
+                "Configure environment"  to (state.progress >= 100)
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF161B22), RoundedCornerShape(12.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                steps.forEach { (label, done) ->
+                    Row(
+                        verticalAlignment     = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(if (done) "✅" else "⏳", fontSize = 14.sp)
+                        Text(
+                            label,
+                            color    = if (done) Color(0xFF3FB950) else Color(0xFF8B949E),
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
+
+            // Error state
+            if (state.isFailed) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Text(
-                        "What this does:",
-                        fontWeight = FontWeight.Bold
+                        "Setup failed. Check your internet connection and try again.",
+                        color     = Color(0xFFFF5252),
+                        fontSize  = 13.sp,
+                        textAlign = TextAlign.Center
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Text("• Downloads a minimal Alpine Linux rootfs (~10MB)")
-                    Text("• Provides bash, git, python, node, and more")
-                    Text("• Runs entirely within the app (no Termux needed)")
-                    Text("• Installed once, used forever")
+                    Button(
+                        onClick = { viewModel.retry() },
+                        colors  = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF))
+                    ) { Text("Retry") }
                 }
             }
         }
