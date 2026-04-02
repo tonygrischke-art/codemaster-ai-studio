@@ -209,8 +209,9 @@ class SafHelper @Inject constructor(
     }
 
     suspend fun createFile(parentDocId: String, name: String, mimeType: String): Result<SafFile> = withContext(Dispatchers.IO) {
+        val rootUri = persistedUri ?: return@withContext Result.failure(Exception("No directory selected"))
         try {
-            val parentUri = DocumentsContract.buildDocumentUriUsingTree(persistedUri, parentDocId)
+            val parentUri = DocumentsContract.buildDocumentUriUsingTree(rootUri, parentDocId)
             val newDocUri = DocumentsContract.createDocument(
                 context.contentResolver,
                 parentUri,
@@ -237,8 +238,9 @@ class SafHelper @Inject constructor(
     }
 
     suspend fun createDirectory(parentDocId: String, name: String): Result<SafFile> = withContext(Dispatchers.IO) {
+        val rootUri = persistedUri ?: return@withContext Result.failure(Exception("No directory selected"))
         try {
-            val parentUri = DocumentsContract.buildDocumentUriUsingTree(persistedUri, parentDocId)
+            val parentUri = DocumentsContract.buildDocumentUriUsingTree(rootUri, parentDocId)
             val newDirUri = DocumentsContract.createDocument(
                 context.contentResolver,
                 parentUri,
@@ -277,9 +279,10 @@ class SafHelper @Inject constructor(
     }
 
     suspend fun getFilePath(docId: String): String? = withContext(Dispatchers.IO) {
+        val rootUri = persistedUri ?: return@withContext null
         try {
-            val uri = DocumentsContract.buildDocumentUriUsingTree(persistedUri, docId)
-            val treeUri = DocumentsContract.buildTreeDocumentUri(persistedUri?.authority ?: "", persistedUri?.lastPathSegment ?: "")
+            val uri = DocumentsContract.buildDocumentUriUsingTree(rootUri, docId)
+            val treeUri = DocumentsContract.buildTreeDocumentUri(rootUri.authority, rootUri.lastPathSegment ?: "")
             if (docId.startsWith(treeUri.lastPathSegment ?: "")) {
                 docId.substringAfter(treeUri.lastPathSegment ?: "")
             } else null
