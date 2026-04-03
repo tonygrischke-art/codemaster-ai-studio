@@ -51,6 +51,11 @@ object AppModule {
     fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> = context.dataStore
 
     @Provides @Singleton
+    fun provideEmbeddedEnvironment(
+        @ApplicationContext context: Context
+    ): EmbeddedEnvironment = EmbeddedEnvironment(context)
+
+    @Provides @Singleton
     fun provideFileSystemRepository(
         @ApplicationContext context: Context,
         safHelper: com.codemaster.aistudio.data.util.SafHelper

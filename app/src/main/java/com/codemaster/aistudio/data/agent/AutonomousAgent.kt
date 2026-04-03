@@ -174,8 +174,9 @@ class AutonomousAgent @Inject constructor(
                     _events.emit(AgentEvent.TaskFailed(failedTask, error.message ?: "Unknown error"))
                     failedTask
                 }
-            ).also {
+            ).also { resolvedTask ->
                 aiRepository.autonomousMode = false
+                return resolvedTask
             }
         } catch (e: Exception) {
             val failedTask = task.copy(
@@ -187,8 +188,6 @@ class AutonomousAgent @Inject constructor(
             aiRepository.autonomousMode = false
             return failedTask
         }
-
-        return task
     }
 
     suspend fun runAutonomousTask(taskDescription: String) {

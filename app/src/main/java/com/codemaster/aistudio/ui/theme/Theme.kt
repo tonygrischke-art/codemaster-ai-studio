@@ -1,6 +1,7 @@
 package com.codemaster.aistudio.ui.theme
 
 import androidx.compose.material3.*
+import com.codemaster.aistudio.ui.theme.CodeMasterTypography
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -55,7 +56,7 @@ private val Typography = Typography(
 fun CodeMasterTheme(darkTheme: Boolean = true, content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
-        typography = Typography,
+        typography = CodeMasterTypography,
         content = content
     )
 }

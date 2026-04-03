@@ -144,7 +144,7 @@ class HomeViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isProcessingCode = true)
             val result = aiRepository.sendMessage(
                 history = emptyList(),
-                userMessage = "Edit and improve this $_uiState.value.selectedLanguage code:\n\n$code\n\nProvide the improved version.",
+                userMessage = "Edit and improve this ${_uiState.value.selectedLanguage} code:\n\n$code\n\nProvide the improved version.",
                 systemPrompt = "You are an expert code editor. Edit, improve and return the code."
             )
             result.fold(
@@ -170,7 +170,7 @@ class HomeViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isProcessingCode = true)
             val result = aiRepository.sendMessage(
                 history = emptyList(),
-                userMessage = "Correct and fix any errors in this $_uiState.value.selectedLanguage code:\n\n$code\n\nReturn the corrected code.",
+                userMessage = "Correct and fix any errors in this ${_uiState.value.selectedLanguage} code:\n\n$code\n\nReturn the corrected code.",
                 systemPrompt = "You are an expert code corrector. Fix errors and return corrected code."
             )
             result.fold(

@@ -1,6 +1,5 @@
 package com.codemaster.aistudio.ui.components
 
-import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -39,21 +38,18 @@ fun FullStoragePickerDialog(
 ) {
     val context = LocalContext.current
 
-    // System SAF directory picker launcher
+    // System SAF directory picker — OpenDocumentTree returns Uri? directly
     val safLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        result.data?.data?.let { uri ->
-            val granted = safHelper.onDirectoryPicked(uri)
-            if (granted) {
-                onSafUriSelected(uri)
-            }
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri: android.net.Uri? ->
+        uri?.let {
+            val granted = safHelper.onDirectoryPicked(it)
+            if (granted) onSafUriSelected(it)
         }
     }
 
     fun launchSafPicker() {
-        val intent = safHelper.createDocumentPickerIntent()
-        safLauncher.launch(intent)
+        safLauncher.launch(null)
     }
 
     // App-private locations (always accessible, no permissions needed)

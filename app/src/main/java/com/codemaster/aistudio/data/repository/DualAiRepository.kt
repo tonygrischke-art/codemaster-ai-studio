@@ -99,7 +99,7 @@ class DualAiRepository @Inject constructor(
                             version = "2023-06-01",
                             contentType = "application/json",
                             request = ClaudeChatRequest(
-                                model = "claude-opus-4-5",
+                                model = "claude-opus-4-5-20251101",
                                 max_tokens = 8000,
                                 system = "You are Claude, an expert software architect and senior developer.",
                                 messages = listOf(ClaudeMessage("user", visionPrompt))
@@ -136,7 +136,7 @@ class DualAiRepository @Inject constructor(
                         version = "2023-06-01",
                         contentType = "application/json",
                         request = ClaudeChatRequest(
-                            model = "claude-opus-4-5",
+                            model = "claude-opus-4-5-20251101",
                             max_tokens = 8000,
                             system = "You are Claude, an expert software architect.",
                             messages = listOf(ClaudeMessage("user", visionPrompt))
@@ -207,7 +207,7 @@ class DualAiRepository @Inject constructor(
                         version = "2023-06-01",
                         contentType = "application/json",
                         request = ClaudeChatRequest(
-                            model = "claude-opus-4-5",
+                            model = "claude-opus-4-5-20251101",
                             max_tokens = 8000,
                             system = "You are a master architect synthesizing the best ideas from multiple experts.",
                             messages = listOf(ClaudeMessage("user", collaborationPrompt))
@@ -274,7 +274,7 @@ class DualAiRepository @Inject constructor(
                         version = "2023-06-01",
                         contentType = "application/json",
                         request = ClaudeChatRequest(
-                            model = "claude-opus-4-5",
+                            model = "claude-opus-4-5-20251101",
                             max_tokens = 8000,
                             system = "You are an elite software engineer. Generate only code in the exact format specified. No explanations outside of file blocks.",
                             messages = listOf(ClaudeMessage("user", codePrompt))

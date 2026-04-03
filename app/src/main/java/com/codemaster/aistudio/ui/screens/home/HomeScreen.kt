@@ -105,7 +105,7 @@ fun HomeScreen(
             // Top bar with recent projects, terminal/upload, and export buttons
             TopActionBar(
                 onRecentProjects = { viewModel.showRecentProjectsDialog(context) },
-                onTerminal = { uiState.projects.firstOrNull()?.let { onOpenTerminal(it.id) } },
+                onTerminal = { onOpenTerminal(uiState.projects.firstOrNull()?.id ?: -1L) },
                 onUploadCode = { viewModel.showUploadDialog() },
                 onExportDoc = { viewModel.exportAsDocument(context) },
                 onExportApk = { viewModel.exportAsApk(context) },

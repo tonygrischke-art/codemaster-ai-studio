@@ -16,7 +16,6 @@ import com.codemaster.aistudio.ui.screens.settings.SettingsScreen
 import com.codemaster.aistudio.ui.screens.snippets.SnippetScreen
 import com.codemaster.aistudio.ui.screens.terminal.TerminalScreen
 import com.codemaster.aistudio.ui.screens.terminal.EmbeddedSetupScreen
-import com.codemaster.aistudio.ui.screens.terminal.EmbeddedSetupScreen
 
 sealed class Screen(val route: String) {
     object Home     : Screen("home")
