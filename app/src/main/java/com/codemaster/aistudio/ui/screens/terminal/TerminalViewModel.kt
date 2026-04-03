@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.codemaster.aistudio.data.util.PlatformHelper
 import com.codemaster.aistudio.data.terminal.EmbeddedEnvironment
 import com.codemaster.aistudio.data.util.SafHelper
-import com.codemaster.aistudio.data.terminal.EmbeddedEnvironment
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers

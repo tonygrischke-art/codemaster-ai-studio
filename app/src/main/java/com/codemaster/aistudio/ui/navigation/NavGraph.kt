@@ -109,11 +109,13 @@ fun NavGraph(
             Screen.TerminalSetup.route,
             arguments = listOf(navArgument("projectId") { type = NavType.LongType; defaultValue = -1L })
         ) { back ->
-            val projectId = back.arguments?.getLong("projectId") ?: -1L
+            val pid = back.arguments?.getLong("projectId") ?: -1L
             EmbeddedSetupScreen(
-                projectId = projectId,
-                onComplete = { navController.navigate(Screen.Terminal.createRoute(projectId)) { popUpTo(Screen.TerminalSetup.route) { inclusive = true } } },
-                onBack = { navController.popBackStack() }
+                onReady = {
+                    navController.navigate("terminal/$pid") {
+                        popUpTo("terminal_setup/$pid") { inclusive = true }
+                    }
+                }
             )
         }
 
