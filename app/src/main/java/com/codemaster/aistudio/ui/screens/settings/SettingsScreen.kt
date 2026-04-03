@@ -1,5 +1,7 @@
 package com.codemaster.aistudio.ui.screens.settings
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -23,7 +26,10 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
     var showApiKey by remember { mutableStateOf(false) }
+    var showClaudeKey by remember { mutableStateOf(false) }
+    var showKimiKey by remember { mutableStateOf(false) }
     var showGithubToken by remember { mutableStateOf(false) }
     var modelExpanded by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
@@ -51,6 +57,22 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(scrollState),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("🔑 API Keys — Free Setup", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "CodeMaster is free to use with your own API keys. Groq is completely free to sign up. Claude and Kimi are pay-as-you-go with free credits on signup.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
 
             // ── AI Configuration ───────────────────────────────────────
             SettingsSection(title = "AI Configuration", icon = Icons.Default.AutoAwesome) {
@@ -68,11 +90,70 @@ fun SettingsScreen(
                     },
                     singleLine = true
                 )
-                Text(
-                    "Get your free key at: console.groq.com",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                TextButton(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://console.groq.com"))
+                        context.startActivity(intent)
+                    }
+                ) {
+                    Icon(Icons.Default.OpenInBrowser, null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Get free Groq key at console.groq.com", style = MaterialTheme.typography.labelSmall)
+                }
+
+                Spacer(Modifier.height(4.dp))
+
+                OutlinedTextField(
+                    value = uiState.claudeApiKey,
+                    onValueChange = { viewModel.updateClaudeApiKey(it) },
+                    label = { Text("Claude / Anthropic API Key") },
+                    placeholder = { Text("sk-ant-...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = if (showClaudeKey) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showClaudeKey = !showClaudeKey }) {
+                            Icon(if (showClaudeKey) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+                        }
+                    },
+                    singleLine = true
                 )
+                TextButton(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://console.anthropic.com"))
+                        context.startActivity(intent)
+                    }
+                ) {
+                    Icon(Icons.Default.OpenInBrowser, null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Get Claude key at console.anthropic.com", style = MaterialTheme.typography.labelSmall)
+                }
+
+                Spacer(Modifier.height(4.dp))
+
+                OutlinedTextField(
+                    value = uiState.kimiApiKey,
+                    onValueChange = { viewModel.updateKimiApiKey(it) },
+                    label = { Text("Kimi / Moonshot API Key") },
+                    placeholder = { Text("sk-...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = if (showKimiKey) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showKimiKey = !showKimiKey }) {
+                            Icon(if (showKimiKey) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+                        }
+                    },
+                    singleLine = true
+                )
+                TextButton(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://platform.moonshot.cn"))
+                        context.startActivity(intent)
+                    }
+                ) {
+                    Icon(Icons.Default.OpenInBrowser, null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Get Kimi key at platform.moonshot.cn", style = MaterialTheme.typography.labelSmall)
+                }
 
                 Spacer(Modifier.height(4.dp))
 

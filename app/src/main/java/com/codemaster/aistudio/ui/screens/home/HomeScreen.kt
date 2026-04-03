@@ -118,6 +118,31 @@ fun HomeScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                if (uiState.groqApiKey.isBlank()) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 0.dp, vertical = 0.dp).clickable {
+                                onOpenSettings()
+                            },
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF2D1F63)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text("⚠️", fontSize = 20.sp)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("No API key set", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                                    Text("Tap here to add your free Groq key and activate AI features", style = MaterialTheme.typography.bodySmall, color = Color(0xFFB39DDB))
+                                }
+                                Icon(Icons.Default.ChevronRight, null, tint = Color(0xFF7C4DFF))
+                            }
+                        }
+                    }
+                }
+
                 // Main Code Field - Blank field in the middle
                 item {
                     MainCodeField(

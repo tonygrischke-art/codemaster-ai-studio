@@ -54,7 +54,8 @@ data class HomeUiState(
     val showTemplateDialog: Boolean = false,
     val selectedTemplate: String? = null,
     val isExportingDoc: Boolean = false,
-    val isExportingApk: Boolean = false
+    val isExportingApk: Boolean = false,
+    val groqApiKey: String = ""
 )
 
 @HiltViewModel
@@ -77,9 +78,10 @@ class HomeViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            val apiKey = settingsRepository.getApiKey()
             projectRepository.getAllProjects()
-                .catch { e -> _uiState.value = _uiState.value.copy(error = e.message, isLoading = false) }
-                .collect { projects -> _uiState.value = _uiState.value.copy(projects = projects, isLoading = false) }
+                .catch { e -> _uiState.value = _uiState.value.copy(error = e.message, isLoading = false, groqApiKey = apiKey) }
+                .collect { projects -> _uiState.value = _uiState.value.copy(projects = projects, isLoading = false, groqApiKey = apiKey) }
         }
     }
 

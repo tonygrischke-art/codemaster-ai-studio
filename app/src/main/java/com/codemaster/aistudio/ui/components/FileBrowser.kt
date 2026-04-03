@@ -183,7 +183,6 @@ fun FileBrowserDialog(
                         )
                     }
                 }
-                }
                 
                 Spacer(Modifier.height(8.dp))
                 
