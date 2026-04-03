@@ -130,7 +130,7 @@ fun FileBrowserDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Button(
-                            onClick = { documentPickerLauncher.launch(safHelper.createDocumentPickerIntent()) },
+                            onClick = { documentPickerLauncher.launch(null) },
                             modifier = Modifier.weight(1f),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                         ) {
