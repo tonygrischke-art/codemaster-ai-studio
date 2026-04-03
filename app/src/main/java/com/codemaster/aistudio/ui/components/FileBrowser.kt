@@ -51,7 +51,8 @@ fun FileBrowserDialog(
         }
     }
     
-    var currentPath by remember { mutableStateOf(startPath ?: defaultLocation.path)}
+    val defaultPath = startPath ?: context.getExternalFilesDir(null)?.absolutePath ?: defaultLocation.path
+    var currentPath by remember { mutableStateOf(defaultPath)}
     var entries by remember { mutableStateOf(listOf<File>()) }
     var error by remember { mutableStateOf<String?>(null) }
     var selectedPath by remember { mutableStateOf(currentPath) }
@@ -91,6 +92,68 @@ fun FileBrowserDialog(
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth().height(400.dp)) {
+                if (safHelper != null) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        ),
+                        onClick = { documentPickerLauncher.launch(null) }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.FolderSpecial,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Browse All Storage",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    "Access Downloads, DCIM, SD card",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
+                            Icon(
+                                Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    
+                    if (selectedSafPath != null) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Selected: $selectedSafPath",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    
+                    Spacer(Modifier.height(12.dp))
+                    HorizontalDivider()
+                    Spacer(Modifier.height(8.dp))
+                }
+                
+                Text(
+                    "Or browse app storage:",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                Spacer(Modifier.height(4.dp))
+                
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -119,6 +182,7 @@ fun FileBrowserDialog(
                             )
                         )
                     }
+                }
                 }
                 
                 Spacer(Modifier.height(8.dp))
