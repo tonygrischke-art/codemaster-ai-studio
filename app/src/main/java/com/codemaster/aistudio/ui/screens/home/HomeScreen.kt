@@ -112,7 +112,8 @@ fun HomeScreen(
                 onExportDoc = { viewModel.exportAsDocument(context) },
                 onExportApk = { viewModel.exportAsApk(context) },
                 isExportingDoc = uiState.isExportingDoc,
-                isExportingApk = uiState.isExportingApk
+                isExportingApk = uiState.isExportingApk,
+                onOpenChat = { onOpenChat(uiState.projects.firstOrNull()?.id ?: -1L) }
             )
 
             LazyColumn(
@@ -166,13 +167,7 @@ fun HomeScreen(
                     )
                 }
 
-                // Template Builder Section
-                item {
-                    TemplateBuilderSection(
-                        onUseTemplate = { template -> viewModel.useTemplate(template) },
-                        currentTemplate = uiState.selectedTemplate
-                    )
-                }
+                // Template Builder removed from home - use Browse Templates via menu
 
                 // Recent projects
                 if (uiState.projects.isNotEmpty()) {
@@ -297,7 +292,8 @@ fun TopActionBar(
     onExportDoc: () -> Unit,
     onExportApk: () -> Unit,
     isExportingDoc: Boolean,
-    isExportingApk: Boolean
+    isExportingApk: Boolean,
+    onOpenChat: () -> Unit = {}
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -306,60 +302,31 @@ fun TopActionBar(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left side - Recent projects and Terminal/Upload
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = onRecentProjects) {
-                    Icon(Icons.Default.History, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Recent", style = MaterialTheme.typography.labelSmall)
-                }
-                TextButton(onClick = onUploadCode) {
-                    Icon(Icons.Default.Upload, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Upload", style = MaterialTheme.typography.labelSmall)
-                }
-                TextButton(onClick = onTerminal) {
-                    Icon(Icons.Default.Terminal, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Terminal", style = MaterialTheme.typography.labelSmall)
-                }
+            TextButton(onClick = onRecentProjects) {
+                Icon(Icons.Default.History, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Recent", style = MaterialTheme.typography.labelSmall)
             }
-
-            // Right side - Export buttons
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Button(
-                    onClick = onExportDoc,
-                    enabled = !isExportingDoc,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.height(32.dp)
-                ) {
-                    if (isExportingDoc) {
-                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = Color.White)
-                    } else {
-                        Icon(Icons.Default.Description, null, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Export Doc", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-                Button(
-                    onClick = onExportApk,
-                    enabled = !isExportingApk,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.height(32.dp)
-                ) {
-                    if (isExportingApk) {
-                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = Color.White)
-                    } else {
-                        Icon(Icons.Default.Android, null, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Export APK", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
+            TextButton(onClick = onUploadCode) {
+                Icon(Icons.Default.Upload, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Upload", style = MaterialTheme.typography.labelSmall)
+            }
+            TextButton(onClick = onTerminal) {
+                Icon(Icons.Default.Terminal, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Terminal", style = MaterialTheme.typography.labelSmall)
+            }
+            TextButton(
+                onClick = onOpenChat,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+            ) {
+                Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("AI Chat", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
         }
     }

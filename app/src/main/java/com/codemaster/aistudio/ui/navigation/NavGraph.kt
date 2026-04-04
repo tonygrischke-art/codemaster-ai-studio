@@ -1,6 +1,8 @@
 package com.codemaster.aistudio.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -136,10 +138,14 @@ fun NavGraph(
         }
 
         composable(Screen.Agent.route) {
+            // Load API keys from DataStore via SettingsViewModel
+            val settingsVm: com.codemaster.aistudio.ui.screens.settings.SettingsViewModel =
+                androidx.hilt.navigation.compose.hiltViewModel()
+            val settings by settingsVm.uiState.collectAsState()
             AgentTerminalScreen(
-                groqKey = "",
-                claudeKey = "",
-                kimiKey = ""
+                groqKey   = settings.apiKey,
+                claudeKey = settings.claudeApiKey,
+                kimiKey   = settings.kimiApiKey
             )
         }
 

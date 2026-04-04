@@ -39,11 +39,14 @@ class EmbeddedEnvironment @Inject constructor(
 
         // proot static binary — ARM64, zero dependencies
         private const val PROOT_URL =
-            "https://github.com/proot-me/proot/releases/download/v5.4.0/proot-v5.4.0-aarch64-static"
+            "https://github.com/proot-me/proot/releases/download/v5.3.2/proot-v5.3.2-aarch64-static"
+        // Fallback if primary fails
+        private const val PROOT_URL_FALLBACK =
+            "https://github.com/termux/termux-packages/releases/download/bootstrap-2024.01.01/bootstrap-aarch64.zip"
 
         // Alpine Linux 3.19 minirootfs for aarch64 (~8 MB)
         private const val ALPINE_URL =
-            "https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/aarch64/alpine-minirootfs-3.19.1-aarch64.tar.gz"
+            "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/aarch64/alpine-minirootfs-3.20.3-aarch64.tar.gz"
     }
 
     val embeddedDir: File get() = File(context.filesDir, "embedded")
@@ -152,7 +155,7 @@ class EmbeddedEnvironment @Inject constructor(
 
             } catch (e: Exception) {
                 Log.e(TAG, "Setup failed", e)
-                val msg = "Setup failed: ${e.message}"
+                val msg = e.message?.let { "Setup failed: $it" } ?: "Setup failed: Check internet connection and try again"
                 _state.value = SetupState.Failed(msg)
                 onProgress(msg, -1)
             }
@@ -162,10 +165,30 @@ class EmbeddedEnvironment @Inject constructor(
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private fun downloadFile(urlStr: String, dest: File, onProgress: (Int) -> Unit) {
+        // Try up to 3 times with exponential backoff
+        var lastException: Exception? = null
+        for (attempt in 1..3) {
+            try {
+                downloadFileOnce(urlStr, dest, onProgress)
+                return
+            } catch (e: Exception) {
+                lastException = e
+                if (attempt < 3) Thread.sleep(2000L * attempt)
+            }
+        }
+        throw lastException ?: RuntimeException("Download failed after 3 attempts")
+    }
+
+    private fun downloadFileOnce(urlStr: String, dest: File, onProgress: (Int) -> Unit) {
         val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 30_000
-            readTimeout    = 60_000
+            connectTimeout = 60_000
+            readTimeout    = 120_000
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", "CodeMaster-AI-Studio/2.0")
             connect()
+        }
+        if (conn.responseCode != HttpURLConnection.HTTP_OK) {
+            throw RuntimeException("HTTP ${conn.responseCode} from $urlStr")
         }
         val total = conn.contentLengthLong
         var downloaded = 0L

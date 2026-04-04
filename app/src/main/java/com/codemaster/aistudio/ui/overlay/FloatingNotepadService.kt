@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
@@ -50,6 +51,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 class FloatingNotepadService : Service(), LifecycleOwner, SavedStateRegistryOwner {
     private var windowManager: WindowManager? = null
     private var floatingView: android.view.View? = null
+    private var floatingParams: WindowManager.LayoutParams? = null
     private val lifecycleRegistry = LifecycleRegistry(this)
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
     override val lifecycle: Lifecycle get() = lifecycleRegistry
@@ -92,7 +94,7 @@ class FloatingNotepadService : Service(), LifecycleOwner, SavedStateRegistryOwne
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         ).apply { gravity = Gravity.TOP or Gravity.START; x = 100; y = 200 }
 
@@ -101,6 +103,8 @@ class FloatingNotepadService : Service(), LifecycleOwner, SavedStateRegistryOwne
             setViewTreeSavedStateRegistryOwner(this@FloatingNotepadService)
             setContent { FloatingNotepadContent(wm, params, this) { stopSelf() } }
         }
+        // FIX: Store params ref so FloatingNotepadContent can toggle focusability
+        floatingParams = params
 
         floatingView = composeView
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
