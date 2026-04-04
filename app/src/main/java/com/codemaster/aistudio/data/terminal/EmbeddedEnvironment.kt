@@ -8,11 +8,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 import java.io.BufferedInputStream
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.file.Files
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -204,12 +209,45 @@ class EmbeddedEnvironment @Inject constructor(
     }
 
     private fun extractTar(tarGz: File, destDir: File) {
-        val proc = ProcessBuilder("tar", "xzf", tarGz.absolutePath, "-C", destDir.absolutePath)
-            .redirectErrorStream(true)
-            .start()
-        val out  = proc.inputStream.bufferedReader().readText()
-        val exit = proc.waitFor()
-        if (exit != 0) throw RuntimeException("tar failed (exit $exit): $out")
+        val errors = mutableListOf<String>()
+        TarArchiveInputStream(
+            GzipCompressorInputStream(BufferedInputStream(FileInputStream(tarGz)))
+        ).use { tar ->
+            var entry: TarArchiveEntry? = tar.nextEntry as? TarArchiveEntry
+            while (entry != null) {
+                try {
+                    val name = entry.name.trimStart('/').replace("..", "")
+                    if (name.isEmpty()) { entry = tar.nextEntry as? TarArchiveEntry; continue }
+                    val outFile = File(destDir, name)
+                    when {
+                        entry.isDirectory -> outFile.mkdirs()
+                        entry.isSymbolicLink -> {
+                            outFile.parentFile?.mkdirs()
+                            if (outFile.exists() || Files.isSymbolicLink(outFile.toPath())) outFile.delete()
+                            Files.createSymbolicLink(outFile.toPath(), java.nio.file.Paths.get(entry.linkName))
+                        }
+                        entry.isLink -> {
+                            outFile.parentFile?.mkdirs()
+                            val target = File(destDir, entry.linkName.trimStart('/'))
+                            if (target.exists()) target.copyTo(outFile, overwrite = true)
+                        }
+                        else -> {
+                            outFile.parentFile?.mkdirs()
+                            FileOutputStream(outFile).use { tar.copyTo(it) }
+                            if (entry.mode and 0b001_001_001 != 0) outFile.setExecutable(true, false)
+                        }
+                    }
+                } catch (e: Exception) {
+                    errors.add("Skipped '${entry.name}': ${e.message}")
+                    Log.w(TAG, errors.last())
+                }
+                entry = tar.nextEntry as? TarArchiveEntry
+            }
+        }
+        val binSh = File(destDir, "bin/sh")
+        if (!binSh.exists() && !Files.isSymbolicLink(binSh.toPath()))
+            throw RuntimeException("bin/sh missing. Errors: ${errors.take(3).joinToString("; ")}")
+        Log.i(TAG, "Extracted OK. Skipped ${errors.size} entries.")
     }
 
     private fun configureRootfs() {
