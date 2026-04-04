@@ -16,11 +16,13 @@ import com.codemaster.aistudio.ui.screens.settings.SettingsScreen
 import com.codemaster.aistudio.ui.screens.snippets.SnippetScreen
 import com.codemaster.aistudio.ui.screens.terminal.TerminalScreen
 import com.codemaster.aistudio.ui.screens.terminal.EmbeddedSetupScreen
+import com.codemaster.aistudio.ui.agent.AgentTerminalScreen
 
 sealed class Screen(val route: String) {
     object Home     : Screen("home")
     object Settings : Screen("settings")
     object Snippets : Screen("snippets")
+    object Agent    : Screen("agent")
     object Chat     : Screen("chat/{projectId}")          { fun createRoute(id: Long = -1L) = "chat/$id" }
     object Editor   : Screen("editor/{projectId}/{fileId}") { fun createRoute(pid: Long, fid: Long = -1L) = "editor/$pid/$fid" }
     object Build    : Screen("build/{projectId}")         { fun createRoute(id: Long = -1L) = "build/$id" }
@@ -45,7 +47,8 @@ fun NavGraph(
                 onOpenTerminal  = { navController.navigate(Screen.TerminalSetup.createRoute(it)) },
                 onOpenGit       = { navController.navigate(Screen.Git.createRoute(it)) },
                 onOpenSnippets  = { navController.navigate(Screen.Snippets.route) },
-                onOpenSettings  = { navController.navigate(Screen.Settings.route) }
+                onOpenSettings  = { navController.navigate(Screen.Settings.route) },
+                onOpenAgent     = { navController.navigate(Screen.Agent.route) }
             )
         }
 
@@ -130,6 +133,14 @@ fun NavGraph(
 
         composable(Screen.Settings.route) {
             SettingsScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Agent.route) {
+            AgentTerminalScreen(
+                groqKey = "",
+                claudeKey = "",
+                kimiKey = ""
+            )
         }
 
         composable(

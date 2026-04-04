@@ -53,6 +53,7 @@ fun HomeScreen(
     onOpenGit: (Long) -> Unit,
     onOpenSnippets: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenAgent: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -69,6 +70,7 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onOpenAgent) { Icon(Icons.Default.SmartToy, "Agent") }
                     IconButton(onClick = onOpenSnippets) { Icon(Icons.Default.Bookmark, "Snippets") }
                     IconButton(onClick = onOpenSettings) { Icon(Icons.Default.Settings, "Settings") }
                 }
