@@ -39,10 +39,7 @@ class EmbeddedEnvironment @Inject constructor(
 
         // proot static binary — ARM64, zero dependencies
         private const val PROOT_URL =
-            "https://github.com/proot-me/proot/releases/download/v5.3.2/proot-v5.3.2-aarch64-static"
-        // Fallback if primary fails
-        private const val PROOT_URL_FALLBACK =
-            "https://github.com/termux/termux-packages/releases/download/bootstrap-2024.01.01/bootstrap-aarch64.zip"
+            "https://skirsten.github.io/proot-portable-android-binaries/aarch64/proot"
 
         // Alpine Linux 3.19 minirootfs for aarch64 (~8 MB)
         private const val ALPINE_URL =
@@ -93,7 +90,8 @@ class EmbeddedEnvironment @Inject constructor(
         "SHELL" to "/bin/sh",
         "PATH"  to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "LANG"  to "en_US.UTF-8",
-        "USER"  to "root"
+        "USER"  to "root",
+        "PROOT_TMP_DIR" to context.cacheDir.absolutePath
     )
 
     // ── Main entry point ──────────────────────────────────────────────────
