@@ -207,6 +207,7 @@ class AgentTerminalViewModel @Inject constructor() : ViewModel() {
                 }
 
                 delay(300) // Small pause between steps for readability
+                }
             }
 
             if (step >= MAX_STEPS && !done) {
