@@ -1,4 +1,4 @@
-package com.tonygrischke.codemasteraistudio.ui.agent
+package com.codemaster.aistudio.ui.agent
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.compose.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -171,10 +172,11 @@ class AgentTerminalViewModel @Inject constructor() : ViewModel() {
                 _uiState.update { it.copy(currentStep = step) }
 
                 // Ask the AI what to do next
-                val aiResponse = callAI(conversationHistory) ?: run {
+                val aiResponse = callAI(conversationHistory)
+                if (aiResponse == null) {
                     addEntry(AgentEntry(type = EntryType.ERROR, text = "AI call failed at step $step"))
-                    break
-                }
+                    done = true
+                } else {
 
                 // Parse response
                 val thought = aiResponse.optString("thought", "")
