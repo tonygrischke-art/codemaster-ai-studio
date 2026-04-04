@@ -38,7 +38,7 @@ class SettingsRepository @Inject constructor(
     suspend fun saveClaudeApiKey(k: String)      { dataStore.edit { it[CLAUDE_API_KEY] = k } }
     suspend fun getKimiApiKey(): String          = dataStore.data.first()[KIMI_API_KEY] ?: ""
     suspend fun saveKimiApiKey(k: String)        { dataStore.edit { it[KIMI_API_KEY] = k } }
-    suspend fun getModel(): String               = dataStore.data.first()[MODEL] ?: "llama-3.3-70b-versatile"
+    suspend fun getModel(): String               = dataStore.data.first()[MODEL] ?: "llama-3.1-8b-instant"
     suspend fun saveModel(m: String)             { dataStore.edit { it[MODEL] = m } }
     suspend fun getDarkTheme(): Boolean          = dataStore.data.first()[DARK_THEME] ?: true
     suspend fun saveDarkTheme(d: Boolean)        { dataStore.edit { it[DARK_THEME] = d } }
