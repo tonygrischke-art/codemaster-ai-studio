@@ -72,5 +72,10 @@ dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
     implementation 'org.json:json:20231013'
     
+    // Termux Libraries (built by GitHub Actions, copied to libs/)
+    implementation files('libs/terminal-emulator-release.aar')
+    implementation files('libs/terminal-view-release.aar')
+    implementation files('libs/termux-shared-release.aar')
+    
     debugImplementation 'androidx.compose.ui:ui-tooling:1.5.4'
 }
