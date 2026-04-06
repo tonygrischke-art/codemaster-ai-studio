@@ -1,9 +1,8 @@
-name: Build APK with Termux
+name: Build APK
 
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
 
 jobs:
   build:
@@ -22,27 +21,31 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v2
     
-    - name: Clone and build Termux
+    - name: Build Termux from source
       run: |
-        cd ..
+        cd $GITHUB_WORKSPACE/..
         git clone --depth 1 --branch v0.118.0 https://github.com/termux/termux-app.git
         cd termux-app
         
-        ./gradlew :terminal-emulator:assembleRelease
-        ./gradlew :terminal-view:assembleRelease
-        ./gradlew :termux-shared:assembleRelease
+        ./gradlew :terminal-emulator:assembleRelease \
+                  :terminal-view:assembleRelease \
+                  :termux-shared:assembleRelease
         
         mkdir -p $GITHUB_WORKSPACE/app/libs
-        find . -name "terminal-emulator-release.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
-        find . -name "terminal-view-release.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
-        find . -name "termux-shared-release.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
+        cp terminal-emulator/build/outputs/aar/terminal-emulator-release.aar $GITHUB_WORKSPACE/app/libs/ || \
+          find . -name "terminal-emulator-release.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
+        cp terminal-view/build/outputs/aar/terminal-view-release.aar $GITHUB_WORKSPACE/app/libs/ || \
+          find . -name "terminal-view-release.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
+        cp termux-shared/build/outputs/aar/termux-shared-release.aar $GITHUB_WORKSPACE/app/libs/ || \
+          find . -name "termux-shared-release.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
         
+        echo "=== AAR files in libs ==="
         ls -la $GITHUB_WORKSPACE/app/libs/
     
-    - name: Build my app
+    - name: Build CodeMaster AI
       run: |
         cd $GITHUB_WORKSPACE
-        ./gradlew assembleDebug
+        ./gradlew assembleDebug --no-daemon
     
     - name: Upload APK
       uses: actions/upload-artifact@v3

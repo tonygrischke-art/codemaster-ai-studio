@@ -17,3 +17,5 @@ app/build/
 # Keystore - NEVER commit
 *.jks
 *.keystore
+# Built by GitHub Actions, don't commit
+app/libs/*.aar
