@@ -9,7 +9,9 @@ import com.codemaster.aistudio.data.tools.ToolCatalog
 import com.codemaster.aistudio.data.tools.ToolExecutor
 import com.codemaster.aistudio.data.tools.ToolResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -79,7 +81,7 @@ class AiRepository @Inject constructor(
             
             while (iterations < maxToolIterations && hasMoreWork) {
                 val request = GroqChatRequest(model = model, messages = currentMessages)
-                val response = groqApiService.chat("Bearer $apiKey", request)
+                val response = retryOn429 { groqApiService.chat("Bearer $apiKey", request) }
                 val content = response.choices.firstOrNull()?.message?.content
                     ?: return@withContext Result.failure(Exception("Empty response from AI"))
 
@@ -198,4 +200,20 @@ ${if (result.error != null) "ERROR: ${result.error}" else ""}
     }
     
     fun estimateTokens(text: String): Int = (text.length / 4).coerceAtLeast(1)
+
+    private suspend fun <T> retryOn429(block: suspend () -> T): T {
+        var delayMs = 3000L
+        var lastErr: Exception? = null
+        repeat(4) { attempt ->
+            try { return block() }
+            catch (e: HttpException) {
+                if (e.code() == 429) { lastErr = e; delay(delayMs); delayMs *= 2 }
+                else throw e
+            }
+            catch (e: Exception) {
+                if (attempt < 2) { lastErr = e; delay(2000L) } else throw e
+            }
+        }
+        throw lastErr ?: RuntimeException("Retry limit exceeded")
+    }
 }

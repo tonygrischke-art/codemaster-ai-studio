@@ -159,6 +159,7 @@ class TerminalViewModel @Inject constructor(
         }
     }
 
+    fun clearLines() { _uiState.value = _uiState.value.copy(lines = emptyList()) }
     fun updateInput(text: String) { _uiState.value = _uiState.value.copy(input = text) }
 
     fun submitCommand() {

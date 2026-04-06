@@ -74,7 +74,7 @@ fun TerminalScreen(
                             Text("LIVE", color = TermGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         }
                     }
-                    IconButton(onClick = { viewModel.submitCommand() }) {
+                    IconButton(onClick = { viewModel.clearLines() }) {
                         Icon(Icons.Default.DeleteSweep, "Clear", tint = TermWhite)
                     }
                 },
