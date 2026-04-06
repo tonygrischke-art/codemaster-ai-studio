@@ -1,4 +1,4 @@
-package com.codemaster.aistudio.ui.fragment
+package com.codemaster.aistudio.ui.terminal
 
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -6,7 +6,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -46,23 +45,23 @@ class TerminalFragment : Fragment() {
             terminalManager.createTerminalView(container)
         }
 
-        setupQuickCommands()
+        setupQuickCommands(view)
     }
 
-    private fun setupQuickCommands() {
-        view?.findViewById<MaterialButton>(R.id.btn_ls)?.setOnClickListener {
+    private fun setupQuickCommands(view: View) {
+        view.findViewById<MaterialButton>(R.id.btn_ls)?.setOnClickListener {
             terminalManager.executeCommand("ls -la\n")
         }
-        view?.findViewById<MaterialButton>(R.id.btn_git)?.setOnClickListener {
+        view.findViewById<MaterialButton>(R.id.btn_git)?.setOnClickListener {
             terminalManager.executeCommand("git status\n")
         }
-        view?.findViewById<MaterialButton>(R.id.btn_python)?.setOnClickListener {
+        view.findViewById<MaterialButton>(R.id.btn_python)?.setOnClickListener {
             terminalManager.executeCommand("python3\n")
         }
-        view?.findViewById<MaterialButton>(R.id.btn_npm)?.setOnClickListener {
+        view.findViewById<MaterialButton>(R.id.btn_npm)?.setOnClickListener {
             terminalManager.executeCommand("npm --version\n")
         }
-        view?.findViewById<MaterialButton>(R.id.btn_clear)?.setOnClickListener {
+        view.findViewById<MaterialButton>(R.id.btn_clear)?.setOnClickListener {
             terminalManager.executeCommand("clear\n")
         }
     }

@@ -3,9 +3,9 @@ package com.codemaster.aistudio.ui.adapter
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.viewpager2.adapter.FragmentStateAdapter
-import com.codemaster.aistudio.ui.fragment.EditorFragment
-import com.codemaster.aistudio.ui.fragment.TerminalFragment
-import com.codemaster.aistudio.ui.fragment.ProjectsFragment
+import com.codemaster.aistudio.ui.editor.EditorFragment
+import com.codemaster.aistudio.ui.projects.ProjectsFragment
+import com.codemaster.aistudio.ui.terminal.TerminalFragment
 
 class MainPagerAdapter(activity: FragmentActivity) : FragmentStateAdapter(activity) {
     
