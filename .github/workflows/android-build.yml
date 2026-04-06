@@ -1,155 +1,51 @@
-name: Android CI Build
+name: Build APK with Termux
 
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  JAVA_VERSION: '17'
-  ANDROID_COMPILE_SDK: '35'
-  ANDROID_BUILD_TOOLS: '35.0.0'
-  GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false'
-  TERMUX_BRANCH: 'v0.118.0'
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 1
-    
+    - name: Checkout my app
+      uses: actions/checkout@v3
+      
     - name: Set up JDK 17
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v3
       with:
-        java-version: ${{ env.JAVA_VERSION }}
+        java-version: '17'
         distribution: 'temurin'
-        cache: gradle
     
     - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
+      uses: android-actions/setup-android@v2
     
-    - name: Accept Android SDK licenses
-      run: yes | sdkmanager --licenses || true
-    
-    - name: Install Android SDK components
-      run: sdkmanager "platforms;android-${{ env.ANDROID_COMPILE_SDK }}" "build-tools;${{ env.ANDROID_BUILD_TOOLS }}"
-    
-    - name: Clone and Build Termux Libraries
+    - name: Clone and build Termux
       run: |
         cd ..
-        git clone --depth 1 --branch ${{ env.TERMUX_BRANCH }} https://github.com/termux/termux-app.git termux-src
-        cd termux-src
-        ./gradlew :terminal-emulator:assembleRelease :terminal-view:assembleRelease :termux-shared:assembleRelease --no-daemon --no-build-cache
+        git clone --depth 1 --branch v0.118.0 https://github.com/termux/termux-app.git
+        cd termux-app
+        
+        ./gradlew :terminal-emulator:assembleRelease
+        ./gradlew :terminal-view:assembleRelease
+        ./gradlew :termux-shared:assembleRelease
+        
         mkdir -p $GITHUB_WORKSPACE/app/libs
-        find . -path "*/build/outputs/aar/*.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
+        find . -name "terminal-emulator-release.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
+        find . -name "terminal-view-release.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
+        find . -name "termux-shared-release.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
+        
         ls -la $GITHUB_WORKSPACE/app/libs/
     
-    - name: Create local.properties
-      run: echo "sdk.dir=$ANDROID_HOME" > local.properties
-    
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-    
-    - name: Decode Google Services
-      if: env.GOOGLE_SERVICES_JSON != ''
-      env:
-        GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+    - name: Build my app
       run: |
-        if [ -n "$GOOGLE_SERVICES_JSON" ]; then
-          echo "$GOOGLE_SERVICES_JSON" | base64 -d > app/google-services.json
-        fi
+        cd $GITHUB_WORKSPACE
+        ./gradlew assembleDebug
     
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug --no-daemon --no-build-cache --rerun-tasks
-    
-    - name: Upload Debug APK
-      if: success()
-      uses: actions/upload-artifact@v4
+    - name: Upload APK
+      uses: actions/upload-artifact@v3
       with:
-        name: CodeMaster-Debug-APK-${{ github.run_id }}
-        path: app/build/outputs/apk/debug/app-debug.apk
-        retention-days: 7
-
-  release:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 1
-    
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: ${{ env.JAVA_VERSION }}
-        distribution: 'temurin'
-        cache: gradle
-    
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
-    
-    - name: Accept Android SDK licenses
-      run: yes | sdkmanager --licenses || true
-    
-    - name: Install Android SDK components
-      run: sdkmanager "platforms;android-${{ env.ANDROID_COMPILE_SDK }}" "build-tools;${{ env.ANDROID_BUILD_TOOLS }}"
-    
-    - name: Clone and Build Termux Libraries
-      run: |
-        cd ..
-        git clone --depth 1 --branch ${{ env.TERMUX_BRANCH }} https://github.com/termux/termux-app.git termux-src
-        cd termux-src
-        ./gradlew :terminal-emulator:assembleRelease :terminal-view:assembleRelease :termux-shared:assembleRelease --no-daemon --no-build-cache
-        mkdir -p $GITHUB_WORKSPACE/app/libs
-        find . -path "*/build/outputs/aar/*.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
-    
-    - name: Create local.properties
-      run: echo "sdk.dir=$ANDROID_HOME" > local.properties
-    
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-    
-    - name: Build Release APK
-      env:
-        KEYSTORE: ${{ secrets.KEYSTORE }}
-        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-      run: |
-        if [ -n "$KEYSTORE" ]; then
-          echo "$KEYSTORE" | base64 -d > release.keystore
-        fi
-        ./gradlew assembleRelease --no-daemon --no-build-cache
-    
-    - name: Upload Release APK
-      if: success()
-      uses: actions/upload-artifact@v4
-      with:
-        name: CodeMaster-Release-APK-${{ github.run_id }}
-        path: app/build/outputs/apk/release/app-release.apk
-        retention-days: 30
-    
-    - name: Create GitHub Release
-      if: env.KEYSTORE != ''
-      uses: softprops/action-gh-release@v2
-      with:
-        files: app/build/outputs/apk/release/app-release.apk
-        tag: v${{ github.run_number }}
-        name: CodeMaster AI Studio v${{ github.run_number }}
-        draft: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        name: CodeMaster-AI-Debug
+        path: app/build/outputs/apk/debug/*.apk
