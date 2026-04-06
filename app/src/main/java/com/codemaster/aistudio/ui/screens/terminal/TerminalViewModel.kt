@@ -52,15 +52,16 @@ class TerminalViewModel @Inject constructor(
     private var readerJob: Job? = null
     private val maxLines = 2000
 
-    private fun buildShellCommand(): List<String> {
-        return embeddedEnv.shellCommand()
+    private fun buildShellCommand(startDir: String): List<String> {
+        val targetDir = if (startDir.startsWith("/")) startDir else "/root"
+        return embeddedEnv.shellCommand(startDir = targetDir)
     }
 
     fun init(projectId: Long) {
         val isTermux = platformHelper.isTermuxAvailable
         val isSaf = platformHelper.isUsingSaf
         val homeDir = platformHelper.homeDirectory
-        val shellCmd = buildShellCommand()
+        val shellCmd = buildShellCommand(homeDir)
 
         appendLine(TerminalLine("=== CodeMaster AI Studio Terminal ===", LineType.SYSTEM))
         appendLine(TerminalLine("Shell: ${shellCmd.first()}", LineType.SYSTEM))

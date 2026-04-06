@@ -47,6 +47,7 @@ data class ChatUiState(
     val attachedFileContent: String? = null,
     val totalTokens: Int = 0,
     val error: String? = null,
+    val errorRequiresSettings: Boolean = false,
     val successMessage: String? = null,
     val currentPersona: AiPersona = AI_PERSONAS.first(),
     val showPersonaPicker: Boolean = false,
@@ -333,7 +334,7 @@ class AiChatViewModel @Inject constructor(
     fun clearAttachment() { _uiState.value = _uiState.value.copy(attachedFileName = null, attachedFileContent = null) }
     fun showPersonaPicker() { _uiState.value = _uiState.value.copy(showPersonaPicker = true) }
     fun hidePersonaPicker() { _uiState.value = _uiState.value.copy(showPersonaPicker = false) }
-    fun clearError() { _uiState.value = _uiState.value.copy(error = null) }
+    fun clearError() { _uiState.value = _uiState.value.copy(error = null, errorRequiresSettings = false) }
     fun clearSuccess() { _uiState.value = _uiState.value.copy(successMessage = null) }
 
     fun selectPersona(persona: AiPersona) {
@@ -395,10 +396,16 @@ class AiChatViewModel @Inject constructor(
                         projectId = currentProjectId, role = "assistant",
                         content = response, tokenCount = aiRepository.estimateTokens(response)
                     ))
-                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    _uiState.value = _uiState.value.copy(isLoading = false, errorRequiresSettings = false)
                 },
                 onFailure = { e -> 
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = e.message) 
+                    val requiresSettings = e.message?.contains("API key", ignoreCase = true) == true ||
+                                            e.message?.contains("Settings", ignoreCase = true) == true
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false, 
+                        error = e.message ?: "Unknown error",
+                        errorRequiresSettings = requiresSettings
+                    ) 
                 }
             )
         }

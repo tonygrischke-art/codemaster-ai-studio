@@ -43,7 +43,8 @@ import java.io.InputStreamReader
 @Composable
 fun AiChatScreen(
     projectId: Long,
-    onBack: () -> Unit,
+    onBack: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = onBack,
     viewModel: AiChatViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -166,7 +167,20 @@ fun AiChatScreen(
             uiState.error?.let { error ->
                 Snackbar(
                     modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp),
-                    action = { TextButton(onClick = viewModel::clearError) { Text("OK") } }
+                    action = {
+                        if (uiState.errorRequiresSettings) {
+                            TextButton(onClick = {
+                                viewModel.clearError()
+                                onNavigateToSettings()
+                            }) { Text("Go to Settings") }
+                        }
+                        TextButton(onClick = viewModel::clearError) { Text("OK") }
+                    },
+                    dismissAction = {
+                        IconButton(onClick = viewModel::clearError) {
+                            Icon(Icons.Default.Close, "Dismiss", modifier = Modifier.size(16.dp))
+                        }
+                    }
                 ) { Text(error) }
             }
         }

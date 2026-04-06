@@ -94,7 +94,8 @@ class FloatingNotepadService : Service(), LifecycleOwner, SavedStateRegistryOwne
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply { gravity = Gravity.TOP or Gravity.START; x = 100; y = 200 }
 
@@ -103,9 +104,7 @@ class FloatingNotepadService : Service(), LifecycleOwner, SavedStateRegistryOwne
             setViewTreeSavedStateRegistryOwner(this@FloatingNotepadService)
             setContent { FloatingNotepadContent(wm, params, this) { stopSelf() } }
         }
-        // FIX: Store params ref so FloatingNotepadContent can toggle focusability
         floatingParams = params
-
         floatingView = composeView
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
         lifecycleRegistry.currentState = Lifecycle.State.RESUMED
@@ -136,6 +135,7 @@ fun FloatingNotepadContent(windowManager: WindowManager, params: WindowManager.L
     var showActionsMenu by remember { mutableStateOf(false) }
     var windowWidth by remember { mutableStateOf(280) }
     var windowHeight by remember { mutableStateOf(200) }
+    var isTextFieldFocused by remember { mutableStateOf(false) }
 
     val bgColor = Color(0xFF1E1E2E)
     val accentColor = Color(0xFF7C3AED)
@@ -145,6 +145,18 @@ fun FloatingNotepadContent(windowManager: WindowManager, params: WindowManager.L
     val warningColor = Color(0xFFF59E0B)
 
     val languages = listOf("Kotlin", "Java", "Python", "JavaScript", "TypeScript", "C", "C++", "C#", "Swift", "Dart", "PHP", "Ruby", "Go", "Rust", "Groovy", "XML", "JSON", "YAML", "HTML", "CSS", "SQL")
+
+    fun updateFocusFlags(focused: Boolean) {
+        params.flags = if (focused) {
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+        } else {
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        }
+        try {
+            windowManager.updateViewLayout(view, params)
+        } catch (_: Exception) {}
+    }
 
     Box(
         modifier = Modifier
@@ -177,7 +189,6 @@ fun FloatingNotepadContent(windowManager: WindowManager, params: WindowManager.L
                     .border(1.dp, borderColor, RoundedCornerShape(12.dp))
                     .padding(8.dp)
             ) {
-                // Header with drag handle and controls
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -190,7 +201,6 @@ fun FloatingNotepadContent(windowManager: WindowManager, params: WindowManager.L
                         fontWeight = FontWeight.Bold
                     )
                     Row {
-                        // Language selector
                         Box {
                             TextButton(
                                 onClick = { showLanguageMenu = true },
@@ -225,7 +235,6 @@ fun FloatingNotepadContent(windowManager: WindowManager, params: WindowManager.L
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Code editor area
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -253,12 +262,18 @@ fun FloatingNotepadContent(windowManager: WindowManager, params: WindowManager.L
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState())
+                            .onFocusChanged { focusState ->
+                                val wasFocused = isTextFieldFocused
+                                isTextFieldFocused = focusState.isFocused
+                                if (wasFocused != isTextFieldFocused) {
+                                    updateFocusFlags(isTextFieldFocused)
+                                }
+                            }
                     )
                 }
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Action buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -293,7 +308,6 @@ fun FloatingNotepadContent(windowManager: WindowManager, params: WindowManager.L
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Quick actions row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -333,7 +347,6 @@ fun FloatingNotepadContent(windowManager: WindowManager, params: WindowManager.L
                     )
                 }
 
-                // Resize handle at bottom
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
