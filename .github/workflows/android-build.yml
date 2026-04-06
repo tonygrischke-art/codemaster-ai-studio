@@ -10,10 +10,10 @@ jobs:
     
     steps:
     - name: Checkout my app
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       
     - name: Set up JDK 17
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
@@ -26,20 +26,11 @@ jobs:
         cd $GITHUB_WORKSPACE/..
         git clone --depth 1 --branch v0.118.0 https://github.com/termux/termux-app.git
         cd termux-app
-        
         ./gradlew :terminal-emulator:assembleRelease \
                   :terminal-view:assembleRelease \
                   :termux-shared:assembleRelease
-        
         mkdir -p $GITHUB_WORKSPACE/app/libs
-        cp terminal-emulator/build/outputs/aar/terminal-emulator-release.aar $GITHUB_WORKSPACE/app/libs/ || \
-          find . -name "terminal-emulator-release.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
-        cp terminal-view/build/outputs/aar/terminal-view-release.aar $GITHUB_WORKSPACE/app/libs/ || \
-          find . -name "terminal-view-release.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
-        cp termux-shared/build/outputs/aar/termux-shared-release.aar $GITHUB_WORKSPACE/app/libs/ || \
-          find . -name "termux-shared-release.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
-        
-        echo "=== AAR files in libs ==="
+        find . -name "*.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
         ls -la $GITHUB_WORKSPACE/app/libs/
     
     - name: Build CodeMaster AI
@@ -48,7 +39,7 @@ jobs:
         ./gradlew assembleDebug --no-daemon
     
     - name: Upload APK
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: CodeMaster-AI-Debug
         path: app/build/outputs/apk/debug/*.apk
