@@ -15,11 +15,12 @@ env:
   ANDROID_COMPILE_SDK: '35'
   ANDROID_BUILD_TOOLS: '35.0.0'
   GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false'
+  TERMUX_BRANCH: 'v0.118.0'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     
     steps:
     - name: Checkout code
@@ -42,6 +43,16 @@ jobs:
     
     - name: Install Android SDK components
       run: sdkmanager "platforms;android-${{ env.ANDROID_COMPILE_SDK }}" "build-tools;${{ env.ANDROID_BUILD_TOOLS }}"
+    
+    - name: Clone and Build Termux Libraries
+      run: |
+        cd ..
+        git clone --depth 1 --branch ${{ env.TERMUX_BRANCH }} https://github.com/termux/termux-app.git termux-src
+        cd termux-src
+        ./gradlew :terminal-emulator:assembleRelease :terminal-view:assembleRelease :termux-shared:assembleRelease --no-daemon --no-build-cache
+        mkdir -p $GITHUB_WORKSPACE/app/libs
+        find . -path "*/build/outputs/aar/*.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
+        ls -la $GITHUB_WORKSPACE/app/libs/
     
     - name: Create local.properties
       run: echo "sdk.dir=$ANDROID_HOME" > local.properties
@@ -68,19 +79,10 @@ jobs:
         name: CodeMaster-Debug-APK-${{ github.run_id }}
         path: app/build/outputs/apk/debug/app-debug.apk
         retention-days: 7
-    
-    - name: Build Summary
-      if: always()
-      run: |
-        echo "## Build Results" >> $GITHUB_STEP_SUMMARY
-        echo "| Item | Status |" >> $GITHUB_STEP_SUMMARY
-        echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
-        echo "| Debug APK | ${{ steps.build.outcome == 'success' && ':white_check_mark:' || ':x:' }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| Workflow | [${{ github.workflow }} #${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> $GITHUB_STEP_SUMMARY
 
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
     
@@ -105,6 +107,15 @@ jobs:
     
     - name: Install Android SDK components
       run: sdkmanager "platforms;android-${{ env.ANDROID_COMPILE_SDK }}" "build-tools;${{ env.ANDROID_BUILD_TOOLS }}"
+    
+    - name: Clone and Build Termux Libraries
+      run: |
+        cd ..
+        git clone --depth 1 --branch ${{ env.TERMUX_BRANCH }} https://github.com/termux/termux-app.git termux-src
+        cd termux-src
+        ./gradlew :terminal-emulator:assembleRelease :terminal-view:assembleRelease :termux-shared:assembleRelease --no-daemon --no-build-cache
+        mkdir -p $GITHUB_WORKSPACE/app/libs
+        find . -path "*/build/outputs/aar/*.aar" -exec cp {} $GITHUB_WORKSPACE/app/libs/ \;
     
     - name: Create local.properties
       run: echo "sdk.dir=$ANDROID_HOME" > local.properties
