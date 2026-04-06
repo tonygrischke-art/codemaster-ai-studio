@@ -50,19 +50,19 @@ class TerminalFragment : Fragment() {
 
     private fun setupQuickCommands(view: View) {
         view.findViewById<MaterialButton>(R.id.btn_ls)?.setOnClickListener {
-            terminalManager.executeCommand("ls -la\n")
+            terminalManager.executeCommand("ls -la")
         }
         view.findViewById<MaterialButton>(R.id.btn_git)?.setOnClickListener {
-            terminalManager.executeCommand("git status\n")
+            terminalManager.executeCommand("git status")
         }
         view.findViewById<MaterialButton>(R.id.btn_python)?.setOnClickListener {
-            terminalManager.executeCommand("python3\n")
+            terminalManager.executeCommand("python3")
         }
         view.findViewById<MaterialButton>(R.id.btn_npm)?.setOnClickListener {
-            terminalManager.executeCommand("npm --version\n")
+            terminalManager.executeCommand("npm --version")
         }
         view.findViewById<MaterialButton>(R.id.btn_clear)?.setOnClickListener {
-            terminalManager.executeCommand("clear\n")
+            terminalManager.executeCommand("clear")
         }
     }
 

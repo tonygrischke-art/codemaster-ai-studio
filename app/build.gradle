@@ -71,10 +71,6 @@ dependencies {
     
     implementation 'androidx.viewpager2:viewpager2:1.0.0'
     
-    implementation 'com.termux:termux-shared:0.118.0'
-    implementation 'com.termux:terminal-view:0.118.0'
-    implementation 'com.termux:terminal-emulator:0.118.0'
-    
     implementation 'com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava'
     
     implementation 'com.google.dagger:hilt-android:2.48'
