@@ -60,24 +60,27 @@ class TerminalViewModel @Inject constructor(
     fun init(projectId: Long) {
         val isTermux = platformHelper.isTermuxAvailable
         val isSaf = platformHelper.isUsingSaf
-        val homeDir = platformHelper.homeDirectory
+        val homeDir = when {
+            embeddedEnv.isReady -> context.filesDir.absolutePath
+            isTermux            -> platformHelper.homeDirectory
+            else                -> context.filesDir.absolutePath
+        }
         val shellCmd = buildShellCommand(homeDir)
 
         appendLine(TerminalLine("=== CodeMaster AI Studio Terminal ===", LineType.SYSTEM))
         appendLine(TerminalLine("Shell: ${shellCmd.first()}", LineType.SYSTEM))
         
         when {
-            isTermux -> {
-                appendLine(TerminalLine("Termux environment detected", LineType.SYSTEM))
-                appendLine(TerminalLine("Git available: ${platformHelper.isTermuxGitAvailable()}", LineType.SYSTEM))
+            embeddedEnv.isReady -> {
+                appendLine(TerminalLine("Alpine Linux proot ready", LineType.SYSTEM))
+                appendLine(TerminalLine("Tip: apk add python3 git nodejs", LineType.SYSTEM))
             }
-            isSaf -> {
-                appendLine(TerminalLine("Storage Access Framework mode", LineType.SYSTEM))
-                appendLine(TerminalLine("Note: Shell commands limited. Use Termux for full terminal.", LineType.SYSTEM))
+            isTermux -> {
+                appendLine(TerminalLine("Termux detected — full shell active", LineType.SYSTEM))
+                appendLine(TerminalLine("Git: ${platformHelper.isTermuxGitAvailable()}", LineType.SYSTEM))
             }
             else -> {
-                appendLine(TerminalLine("Android system shell (limited)", LineType.SYSTEM))
-                appendLine(TerminalLine("Install Termux for full shell + git support", LineType.SYSTEM))
+                appendLine(TerminalLine("Limited shell — use Terminal Setup to install Alpine", LineType.SYSTEM))
             }
         }
         
@@ -94,16 +97,18 @@ class TerminalViewModel @Inject constructor(
     }
 
     private fun startShell(startDir: String, shellCmd: List<String>) {
-        if (startDir.startsWith("saf://")) {
+        val isProot = shellCmd.firstOrNull()?.contains("proot") == true
+        if (startDir.startsWith("saf://") && !isProot) {
             appendLine(TerminalLine("Cannot start shell in SAF directory", LineType.ERROR))
-            appendLine(TerminalLine("Working directory: ${startDir}", LineType.SYSTEM))
+            appendLine(TerminalLine("Open Terminal Setup to install Alpine Linux", LineType.SYSTEM))
             _uiState.value = _uiState.value.copy(isRunning = false)
             return
         }
+        val actualDir = if (startDir.startsWith("saf://")) context.filesDir.absolutePath else startDir
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val workDir = File(startDir).takeIf { it.exists() && it.isDirectory } ?: context.filesDir
+                val workDir = File(actualDir).takeIf { it.exists() && it.isDirectory } ?: context.filesDir
 
                 val pb = ProcessBuilder(shellCmd).apply {
                     directory(workDir)

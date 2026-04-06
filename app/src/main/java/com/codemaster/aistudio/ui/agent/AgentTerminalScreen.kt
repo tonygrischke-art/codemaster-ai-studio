@@ -52,7 +52,7 @@ private const val GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 private const val GROQ_MODEL = "llama-3.3-70b-versatile"
 
 private const val CLAUDE_URL = "https://api.anthropic.com/v1/messages"
-private const val CLAUDE_MODEL = "claude-opus-4-6"
+private const val CLAUDE_MODEL = "claude-sonnet-4-20250514"
 private const val CLAUDE_VERSION = "2023-06-01"
 
 private const val KIMI_URL = "https://api.moonshot.cn/v1/chat/completions"
