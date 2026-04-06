@@ -1,87 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Network -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
-    <!-- Storage - legacy -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
-
-    <!-- Storage - modern (SAF, no permission needed) -->
-    <!-- MANAGE_EXTERNAL_STORAGE removed - using SAF instead -->
-
-    <!-- Termux integration -->
-    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
-
-    <!-- Install APK -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
-    <!-- Microphone for voice input -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-
-    <!-- Foreground service for floating notepad -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-
-    <!-- Overlay permission for floating notepad -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-
-    <!-- Wake lock for keeping operations running -->
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-
-    <!-- Vibration for feedback -->
-    <uses-permission android:name="android.permission.VIBRATE" />
-
-    <!-- Post notifications (Android 13+) -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!-- Receive boot completed for starting services -->
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
-    <!-- Bind to external service -->
-    <uses-permission android:name="android.permission.BIND_EXTERNAL_SERVICE" />
-
-    <!-- Query all packages for app selection -->
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
-
     <application
-        android:name=".CodeMasterApp"
+        android:name=".CodeMasterApplication"
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
-        android:label="CodeMaster AI Studio"
-        android:roundIcon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:hardwareAccelerated="true"
-        android:usesCleartextTraffic="false"
+        android:theme="@style/Theme.CodeMasterAI"
         android:requestLegacyExternalStorage="true"
-        android:theme="@style/Theme.CodeMasterAIStudio">
+        android:preserveLegacyExternalStorage="true"
+        android:usesCleartextTraffic="true"
+        tools:targetApi="34">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize"
-            android:configChanges="orientation|screenSize|keyboardHidden">
+            android:configChanges="orientation|screenSize|smallestScreenSize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- Floating Notepad Service -->
         <service
-            android:name=".ui.overlay.FloatingNotepadService"
+            android:name=".service.FloatingNotepadService"
+            android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="floating_notepad_overlay" />
-        </service>
+            android:foregroundServiceType="dataSync"
+            android:permission="android.permission.SYSTEM_ALERT_WINDOW" />
 
-        <!-- FileProvider for APK installation -->
+        <service
+            android:name=".service.TerminalService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.provider"
+            android:authorities="${applicationId}.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
@@ -90,5 +70,4 @@
         </provider>
 
     </application>
-
 </manifest>

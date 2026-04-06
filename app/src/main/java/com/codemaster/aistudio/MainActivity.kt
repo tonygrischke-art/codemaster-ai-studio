@@ -1,146 +1,269 @@
 package com.codemaster.aistudio
 
 import android.content.Intent
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
-import android.util.Log
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
+import android.os.Environment
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.compose.rememberNavController
-import com.codemaster.aistudio.data.util.SafHelper
-import com.codemaster.aistudio.ui.navigation.NavGraph
-import com.codemaster.aistudio.ui.screens.settings.SettingsViewModel
-import com.codemaster.aistudio.ui.theme.CodeMasterTheme
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.isVisible
+import androidx.lifecycle.lifecycleScope
+import com.codemaster.aistudio.databinding.ActivityMainBinding
+import com.codemaster.aistudio.terminal.EmbeddedTerminalManager
+import com.codemaster.aistudio.ui.adapter.MainPagerAdapter
+import com.codemaster.aistudio.util.AutoPermissionManager
+import com.codemaster.aistudio.service.FloatingNotepadService
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.tabs.TabLayoutMediator
 import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
 
-    private val TAG = "MainActivity"
+    private lateinit var binding: ActivityMainBinding
+    private lateinit var permissionManager: AutoPermissionManager
+    private lateinit var terminalManager: EmbeddedTerminalManager
+    private lateinit var pagerAdapter: MainPagerAdapter
 
-    @Inject
-    lateinit var safHelper: SafHelper
-
-    // Reactive flag — updated immediately after directory pick, no recreate() needed
-    private var hasDirectoryAccess = mutableStateOf(false)
-
-    private val directoryPickerLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == RESULT_OK) {
-            result.data?.data?.let { uri ->
-                val granted = safHelper.onDirectoryPicked(uri)
-                if (granted) {
-                    hasDirectoryAccess.value = true
-                } else {
-                    android.widget.Toast.makeText(
-                        this,
-                        "Directory permission was not granted. Please try again.",
-                        android.widget.Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.entries.all { it.value }
+        if (!allGranted) {
+            showPermissionRationale()
+        } else {
+            checkSpecialPermissions()
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        // Initialise the reactive flag from persisted state
-        hasDirectoryAccess.value = safHelper.hasPersistedAccess()
+        permissionManager = AutoPermissionManager(this)
 
-        setContent {
-            val settingsViewModel: SettingsViewModel = hiltViewModel()
-            val settingsState by settingsViewModel.uiState.collectAsState()
-            val hasAccess by hasDirectoryAccess
+        setupViewPager()
+        setupFabMenu()
+        setupToolbar()
 
-            CodeMasterTheme(darkTheme = settingsState.isDarkTheme) {
-                if (hasAccess) {
-                    val navController = rememberNavController()
-                    NavGraph(navController = navController, safHelper = safHelper)
-                } else {
-                    PermissionScreen(
-                        onSelectDirectory = { launchDirectoryPicker() }
-                    )
-                }
-            }
+        if (!permissionManager.hasAllPermissions()) {
+            requestAllPermissions()
+        } else {
+            initializeApp()
         }
     }
 
-    private fun launchDirectoryPicker() {
-        try {
-            val intent = safHelper.createDocumentPickerIntent()
-            directoryPickerLauncher.launch(intent)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to launch directory picker", e)
+    private fun setupViewPager() {
+        pagerAdapter = MainPagerAdapter(this)
+        binding.viewPager.adapter = pagerAdapter
+        binding.viewPager.offscreenPageLimit = 2
+
+        TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
+            tab.text = when (position) {
+                0 -> "Editor"
+                1 -> "Terminal"
+                2 -> "Projects"
+                else -> ""
+            }
+        }.attach()
+    }
+
+    private fun setupToolbar() {
+        binding.btnAiChat.setOnClickListener {
+            binding.viewPager.currentItem = 0
         }
+
+        binding.btnSettings.setOnClickListener {
+            showSettingsDialog()
+        }
+    }
+
+    private fun setupFabMenu() {
+        binding.fabMenu.setOnClickListener {
+            showQuickActionMenu()
+        }
+    }
+
+    private fun showQuickActionMenu() {
+        val items = arrayOf(
+            "New File",
+            "Open Project",
+            "Floating Notepad",
+            "Git Clone",
+            "Settings",
+            "Help"
+        )
+
+        MaterialAlertDialogBuilder(this, R.style.DarkDialog)
+            .setTitle("Quick Actions")
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> createNewFile()
+                    1 -> openProject()
+                    2 -> launchFloatingNotepad()
+                    3 -> showGitCloneDialog()
+                    4 -> showSettingsDialog()
+                    5 -> showHelp()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun requestAllPermissions() {
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(
+                android.Manifest.permission.READ_MEDIA_IMAGES,
+                android.Manifest.permission.READ_MEDIA_VIDEO,
+                android.Manifest.permission.READ_MEDIA_AUDIO,
+                android.Manifest.permission.INTERNET,
+                android.Manifest.permission.FOREGROUND_SERVICE,
+                android.Manifest.permission.SYSTEM_ALERT_WINDOW,
+                android.Manifest.permission.WAKE_LOCK,
+                android.Manifest.permission.VIBRATE,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            )
+        } else {
+            arrayOf(
+                android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                android.Manifest.permission.INTERNET,
+                android.Manifest.permission.FOREGROUND_SERVICE,
+                android.Manifest.permission.SYSTEM_ALERT_WINDOW,
+                android.Manifest.permission.WAKE_LOCK,
+                android.Manifest.permission.VIBRATE
+            )
+        }
+
+        permissionLauncher.launch(permissions)
+    }
+
+    private fun checkSpecialPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                startActivity(intent)
+                Toast.makeText(this, "Please enable 'All files access'", Toast.LENGTH_LONG).show()
+            }
+        }
+
+        if (!Settings.canDrawOverlays(this)) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
+        }
+
+        lifecycleScope.launch {
+            initializeApp()
+        }
+    }
+
+    private fun showPermissionRationale() {
+        MaterialAlertDialogBuilder(this, R.style.DarkDialog)
+            .setTitle("Permissions Required")
+            .setMessage("CodeMaster AI needs storage and system permissions to function properly.")
+            .setPositiveButton("Grant") { _, _ -> requestAllPermissions() }
+            .setNegativeButton("Exit") { _, _ -> finish() }
+            .setCancelable(false)
+            .show()
+    }
+
+    private fun initializeApp() {
+        terminalManager = EmbeddedTerminalManager(this)
+        
+        lifecycleScope.launch {
+            terminalManager.preInitialize()
+        }
+
+        checkApiKeys()
+    }
+
+    private fun checkApiKeys() {
+        val prefs = getSharedPreferences("settings", MODE_PRIVATE)
+        val geminiKey = prefs.getString("gemini_api_key", null)
+        val kimiKey = prefs.getString("kimi_api_key", null)
+
+        binding.apiKeyBanner.isVisible = geminiKey.isNullOrEmpty() || kimiKey.isNullOrEmpty()
+        
+        binding.apiKeyBanner.setOnClickListener {
+            showSettingsDialog()
+        }
+    }
+
+    private fun launchFloatingNotepad() {
+        if (Settings.canDrawOverlays(this)) {
+            startService(Intent(this, FloatingNotepadService::class.java))
+            Toast.makeText(this, "Floating notepad opened", Toast.LENGTH_SHORT).show()
+        } else {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
+            Toast.makeText(this, "Please enable 'Display over other apps'", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun createNewFile() {
+        binding.viewPager.currentItem = 0
+    }
+
+    private fun openProject() {
+        binding.viewPager.currentItem = 2
+    }
+
+    private fun showGitCloneDialog() {
+        val editText = android.widget.EditText(this).apply {
+            hint = "https://github.com/user/repo.git"
+        }
+
+        MaterialAlertDialogBuilder(this, R.style.DarkDialog)
+            .setTitle("Git Clone")
+            .setView(editText)
+            .setPositiveButton("Clone") { _, _ ->
+                val url = editText.text.toString()
+                if (url.isNotEmpty()) {
+                    lifecycleScope.launch {
+                        terminalManager.executeCommand("git clone $url ~/projects/")
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showSettingsDialog() {
+        SettingsDialogFragment().show(supportFragmentManager, "settings")
+    }
+
+    private fun showHelp() {
+        MaterialAlertDialogBuilder(this, R.style.DarkDialog)
+            .setTitle("CodeMaster AI Help")
+            .setMessage("""
+                |Editor - Write code with AI assistance
+                |Terminal - Full Linux terminal (auto-installed)
+                |Projects - Browse and manage files
+                |
+                |Tips:
+                |Tap FAB for quick actions
+                |Terminal has git, python, node pre-installed
+                |Use floating notepad for quick notes
+            """.trimMargin())
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     override fun onResume() {
         super.onResume()
-    }
-}
-
-@Composable
-fun PermissionScreen(
-    onSelectDirectory: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(
-                text = "📁",
-                style = MaterialTheme.typography.displayLarge
-            )
-            Text(
-                text = "Select Project Directory",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Text(
-                text = "CodeMaster uses Android's Storage Access Framework.\n\n" +
-                        "• Tap below to select your projects folder\n" +
-                        "• Your selection is remembered automatically\n" +
-                        "• Works on Android 11+ (API 30+)\n" +
-                        "• No storage permissions required",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = onSelectDirectory,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Select Directory")
-            }
-            Text(
-                text = "All AI-generated files will be saved here.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        if (::permissionManager.isInitialized && !permissionManager.hasAllPermissions()) {
+            requestAllPermissions()
         }
     }
 }
