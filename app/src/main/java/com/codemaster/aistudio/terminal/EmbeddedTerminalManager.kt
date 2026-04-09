@@ -10,21 +10,28 @@ import android.widget.Toast
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-class EmbeddedTerminalManager(private val context: Context) {
+class EmbeddedTerminalManager(
+    private val context: Context,
+    private val lifecycleScope: CoroutineScope? = null
+) {
     
     private var terminalView: TerminalView? = null
     private var terminalSession: TerminalSession? = null
     private val handler = Handler(Looper.getMainLooper())
+    private val scope = lifecycleScope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var isInstalling = false
     
     suspend fun preInitialize() {
-        withContext(Dispatchers.IO) {
-            if (!isEnvironmentInstalled()) {
+        if (!isEnvironmentInstalled() && !isInstalling) {
+            withContext(Dispatchers.IO) {
                 installEnvironment()
             }
         }
@@ -41,7 +48,7 @@ class EmbeddedTerminalManager(private val context: Context) {
         
         container.addView(terminalView)
         
-        GlobalScope.launch(Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             if (!isEnvironmentInstalled()) {
                 installEnvironment()
             }
@@ -58,6 +65,9 @@ class EmbeddedTerminalManager(private val context: Context) {
     }
 
     private suspend fun installEnvironment() {
+        if (isInstalling) return
+        isInstalling = true
+        
         withContext(Dispatchers.Main) {
             Toast.makeText(context, "Installing terminal...", Toast.LENGTH_LONG).show()
         }
@@ -97,6 +107,8 @@ class EmbeddedTerminalManager(private val context: Context) {
             withContext(Dispatchers.Main) {
                 Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
             }
+        } finally {
+            isInstalling = false
         }
     }
 
@@ -121,7 +133,11 @@ class EmbeddedTerminalManager(private val context: Context) {
             object : TerminalSession.SessionChangedCallback {
                 override fun onTitleChanged(title: String?) {}
                 override fun onSessionFinished(finishedSession: TerminalSession?) {
-                    handler.postDelayed({ startSession() }, 1000)
+                    handler.postDelayed({ 
+                        if (terminalSession?.isRunning != true) {
+                            startSession()
+                        }
+                    }, 1000)
                 }
                 override fun onClipboardText(text: String?) {
                     text?.let {
@@ -190,6 +206,14 @@ class EmbeddedTerminalManager(private val context: Context) {
         destFile.parentFile?.mkdirs()
         context.assets.open(assetPath).use { input ->
             java.io.FileOutputStream(destFile).use { output -> input.copyTo(output) }
+        }
+    }
+
+    fun cleanup() {
+        terminalSession?.close()
+        terminalView?.detachSession()
+        if (lifecycleScope == null) {
+            scope.cancel()
         }
     }
 }

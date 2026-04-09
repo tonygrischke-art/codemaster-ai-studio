@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -118,6 +119,8 @@ class MainActivity : AppCompatActivity() {
     private fun requestAllPermissions() {
         val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             arrayOf(
+                android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
                 android.Manifest.permission.READ_MEDIA_IMAGES,
                 android.Manifest.permission.READ_MEDIA_VIDEO,
                 android.Manifest.permission.READ_MEDIA_AUDIO,
@@ -140,15 +143,13 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        permissionLauncher.launch(permissions)
+        permissionLauncher.launch(permissions.distinct().toTypedArray())
     }
 
     private fun checkSpecialPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
-                val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                startActivity(intent)
-                Toast.makeText(this, "Please enable 'All files access'", Toast.LENGTH_LONG).show()
+                showSafPicker()
             }
         }
 
@@ -165,6 +166,28 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showSafPicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+        safTreeLauncher.launch(intent)
+    }
+
+    private val safTreeLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        result.data?.data?.let { uri ->
+            try {
+                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                contentResolver.takePersistableUriPermission(uri, takeFlags)
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Failed to persist SAF permission", e)
+            }
+        }
+    }
+
     private fun showPermissionRationale() {
         MaterialAlertDialogBuilder(this, R.style.DarkDialog)
             .setTitle("Permissions Required")
@@ -176,7 +199,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initializeApp() {
-        terminalManager = EmbeddedTerminalManager(this)
+        terminalManager = EmbeddedTerminalManager(this, lifecycleScope)
         
         lifecycleScope.launch {
             terminalManager.preInitialize()
@@ -262,8 +285,20 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::permissionManager.isInitialized && !permissionManager.hasAllPermissions()) {
-            requestAllPermissions()
+        if (::permissionManager.isInitialized) {
+            if (!permissionManager.hasAllPermissions()) {
+                val missing = permissionManager.getMissingPermissions()
+                if (missing.isNotEmpty()) {
+                    Toast.makeText(this, "Missing: ${missing.joinToString(", ")}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::terminalManager.isInitialized) {
+            terminalManager.cleanup()
         }
     }
 }

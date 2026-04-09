@@ -51,5 +51,14 @@
 -keep class androidx.datastore.** { *; }
 
 # Keep Monaco editor bridge classes
--keep class com.codemaster.aistudio.ui.components.MonacoEditorState { *; }
 -keep class com.codemaster.aistudio.ui.components.** { *; }
+
+# Termux libraries
+-dontwarn com.termux.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**
+
+# OkHttp
+-dontwarn okhttp3.**
+-dontwarn okio.**

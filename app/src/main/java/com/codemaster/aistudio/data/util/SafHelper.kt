@@ -45,17 +45,31 @@ class SafHelper @Inject constructor(
 
     fun hasPersistedAccess(): Boolean {
         val uri = persistedUri ?: return false
-        // Tree URIs cannot be opened as streams - check the persisted grants table instead
-        val granted = context.contentResolver.persistedUriPermissions.any { permission ->
-            permission.uri == uri &&
-            permission.isReadPermission &&
-            permission.isWritePermission
-        }
-        if (!granted) {
-            Log.w(TAG, "No persisted permission found for URI: $uri — clearing saved URI")
+        try {
+            val granted = context.contentResolver.persistedUriPermissions.any { permission ->
+                permission.uri == uri &&
+                permission.isReadPermission &&
+                permission.isWritePermission
+            }
+            if (!granted) {
+                Log.w(TAG, "No persisted permission found for URI: $uri — clearing saved URI")
+                persistedUri = null
+            }
+            return granted
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking persisted access", e)
             persistedUri = null
+            return false
         }
-        return granted
+    }
+
+    fun validateAndRepair(): Boolean {
+        if (!hasPersistedAccess()) {
+            Log.w(TAG, "SAF permission expired, clearing stored URI")
+            persistedUri = null
+            return false
+        }
+        return true
     }
 
     fun getDocumentFile(): DocumentFile? {
