@@ -15,6 +15,7 @@ import androidx.lifecycle.lifecycleScope
 import com.codemaster.aistudio.databinding.ActivityMainBinding
 import com.codemaster.aistudio.terminal.EmbeddedTerminalManager
 import com.codemaster.aistudio.ui.adapter.MainPagerAdapter
+import com.codemaster.aistudio.ui.settings.SettingsDialogFragment
 import com.codemaster.aistudio.util.AutoPermissionManager
 import com.codemaster.aistudio.service.FloatingNotepadService
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -254,7 +255,7 @@ class MainActivity : AppCompatActivity() {
                 val url = editText.text.toString()
                 if (url.isNotEmpty()) {
                     lifecycleScope.launch {
-                        terminalManager.executeCommand("git clone $url ~/projects/")
+                        terminalManager?.executeCommand("git clone $url ~/projects/")
                     }
                 }
             }
