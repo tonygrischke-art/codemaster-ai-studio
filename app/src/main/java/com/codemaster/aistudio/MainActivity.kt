@@ -27,7 +27,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var permissionManager: AutoPermissionManager
-    private lateinit var terminalManager: EmbeddedTerminalManager
+    private var terminalManager: EmbeddedTerminalManager? = null
     private lateinit var pagerAdapter: MainPagerAdapter
 
     private val permissionLauncher = registerForActivityResult(
@@ -202,9 +202,9 @@ class MainActivity : AppCompatActivity() {
         terminalManager = EmbeddedTerminalManager(this, lifecycleScope)
         
         lifecycleScope.launch {
-            terminalManager.preInitialize()
+            terminalManager?.preInitialize()
         }
-
+        
         checkApiKeys()
     }
 
@@ -297,8 +297,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        if (::terminalManager.isInitialized) {
-            terminalManager.cleanup()
-        }
+        terminalManager?.cleanup()
     }
 }

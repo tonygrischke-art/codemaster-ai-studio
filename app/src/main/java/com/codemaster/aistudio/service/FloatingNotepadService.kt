@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
-import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
@@ -21,6 +20,8 @@ import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.codemaster.aistudio.MainActivity
+import com.codemaster.aistudio.R
+
 import java.io.File
 
 class FloatingNotepadService : Service() {
