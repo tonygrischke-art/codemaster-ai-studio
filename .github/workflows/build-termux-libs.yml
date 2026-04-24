@@ -1,0 +1,50 @@
+name: Build Termux Libraries
+
+on:
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Termux App
+      uses: actions/checkout@v4
+      with:
+        repository: termux/termux-app
+        path: termux-app
+        sparse-checkout: |
+          terminal-emulator
+          terminal-view
+          termux-shared
+          gradle
+          gradlew
+          gradlew.bat
+          build.gradle
+          settings.gradle
+          gradle.properties
+        sparse-checkout-cone-mode: false
+    
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+    
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 17
+    
+    - name: Build Libraries
+      run: |
+        cd termux-app
+        chmod +x gradlew
+        ./gradlew :terminal-emulator:assembleRelease :terminal-view:assembleRelease :termux-shared:assembleRelease --no-daemon
+    
+    - name: Upload AARs
+      uses: actions/upload-artifact@v4
+      with:
+        name: termux-libs
+        path: |
+          termux-app/terminal-emulator/build/outputs/aar/*.aar
+          termux-app/terminal-view/build/outputs/aar/*.aar
+          termux-app/termux-shared/build/outputs/aar/*.aar
