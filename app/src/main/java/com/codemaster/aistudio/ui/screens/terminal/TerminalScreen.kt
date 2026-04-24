@@ -141,6 +141,7 @@ fun TerminalScreen(
                         LineType.OUTPUT -> TermWhite
                         LineType.ERROR  -> TermRed
                         LineType.SYSTEM -> TermYellow
+                        else -> TermWhite
                     },
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp,
