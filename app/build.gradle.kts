@@ -132,4 +132,6 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    // Material Components for XML layouts
+    implementation("com.google.android.material:material:1.11.0")
 }
