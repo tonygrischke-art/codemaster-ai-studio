@@ -1,0 +1,40 @@
+name: Run Tests on Android Emulator
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  emulator-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Run instrumented tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          profile: Nexus 6
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: ./gradlew connectedAndroidTest
+
+      - name: Capture Logcat
+        if: failure()
+        run: adb logcat -d > logcat.log
+
+      - name: Upload Logcat on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logcat-output
+          path: logcat.log
