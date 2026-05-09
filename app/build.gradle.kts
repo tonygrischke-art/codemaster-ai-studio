@@ -135,4 +135,8 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     // Material Components for XML layouts
     implementation("com.google.android.material:material:1.11.0")
+
+    // Termux libraries from JitPack
+    implementation("com.github.termux.termux-app:terminal-emulator:v0.118.1")
+    implementation("com.github.termux.termux-app:terminal-view:v0.118.1")
 }
