@@ -143,6 +143,8 @@ jobs:
     needs: [build, test]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout repository
@@ -155,12 +157,10 @@ jobs:
         path: ./artifacts/
 
     - name: Create Release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: v${{ github.run_number }}
-        release_name: CodeMaster AI Studio v${{ github.run_number }}
+        name: CodeMaster AI Studio v${{ github.run_number }}
         body: |
           Automated build from main branch
           - Debug APK included
