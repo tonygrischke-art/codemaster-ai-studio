@@ -31,7 +31,7 @@
         </activity>
 
         <service
-            android:name=".service.FloatingNotepadService"
+            android:name=".ui.overlay.FloatingNotepadService"
             android:enabled="true"
             android:exported="false" />
 
