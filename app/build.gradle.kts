@@ -61,11 +61,20 @@ android {
  kotlinCompilerExtensionVersion = "1.5.14" // Kept as-is (stable version independent of compileSdk)
  }
 
- packaging {
- resources {
- excludes += "/META-INF/{AL2.0,LGPL2.1}"
- }
- }
+    packaging {
+        resources {
+            excludes += setOf(
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "META-INF/gradle/incremental.annotation.processors",
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt",
+                "META-INF/*.kotlin_module"
+            )
+        }
+    }
 }
 
 dependencies {
