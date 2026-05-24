@@ -150,16 +150,14 @@ class MainActivity : AppCompatActivity() {
     private fun checkSpecialPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
-                showSafPicker()
+                showManageAllFilesPermissionDialog()
+                return
             }
         }
 
         if (!Settings.canDrawOverlays(this)) {
-            val intent = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
-            startActivity(intent)
+            showOverlayPermissionDialog()
+            return
         }
 
         lifecycleScope.launch {
@@ -167,7 +165,85 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showManageAllFilesPermissionDialog() {
+        MaterialAlertDialogBuilder(this, R.style.DarkDialog)
+            .setTitle("All Files Access Required")
+            .setMessage("CodeMaster AI needs access to all files on your device to browse, edit, and save code projects anywhere on your storage.\n\nPlease tap 'Allow' in the next screen.")
+            .setPositiveButton("Grant") { _, _ ->
+                try {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                    manageAllFilesLauncher.launch(intent)
+                } catch (e: Exception) {
+                    // Fallback: open general storage settings
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                }
+            }
+            .setNegativeButton("Exit") { _, _ -> finish() }
+            .setCancelable(false)
+            .show()
+    }
+
+    private val manageAllFilesLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (Environment.isExternalStorageManager()) {
+                // Now check overlay permission
+                if (!Settings.canDrawOverlays(this)) {
+                    showOverlayPermissionDialog()
+                } else {
+                    lifecycleScope.launch { initializeApp() }
+                }
+            } else {
+                showManageAllFilesPermissionDialog()
+            }
+        }
+    }
+
+    private fun showOverlayPermissionDialog() {
+        MaterialAlertDialogBuilder(this, R.style.DarkDialog)
+            .setTitle("Display Over Other Apps")
+            .setMessage("CodeMaster AI needs permission to display over other apps for the Floating Notepad feature.\n\nPlease tap 'Allow' in the next screen.")
+            .setPositiveButton("Grant") { _, _ ->
+                try {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                    overlayPermissionLauncher.launch(intent)
+                } catch (e: Exception) {
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                }
+            }
+            .setNegativeButton("Skip") { _, _ ->
+                lifecycleScope.launch { initializeApp() }
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    private val overlayPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (Settings.canDrawOverlays(this)) {
+            lifecycleScope.launch { initializeApp() }
+        } else {
+            // Overlay not granted but continue anyway (not critical)
+            lifecycleScope.launch { initializeApp() }
+        }
+    }
+
     private fun showSafPicker() {
+        // Legacy SAF folder picker for older devices or as fallback
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
@@ -286,11 +362,19 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::permissionManager.isInitialized) {
+        if (::permissionManager.isInitialized && ::binding.isInitialized) {
             if (!permissionManager.hasAllPermissions()) {
                 val missing = permissionManager.getMissingPermissions()
                 if (missing.isNotEmpty()) {
-                    Toast.makeText(this, "Missing: ${missing.joinToString(", ")}", Toast.LENGTH_SHORT).show()
+                    binding.apiKeyBanner.text = "⚠ Missing permissions: ${missing.joinToString(", ")}"
+                    binding.apiKeyBanner.isVisible = true
+                    binding.apiKeyBanner.setOnClickListener {
+                        requestAllPermissions()
+                    }
+                }
+            } else {
+                if (terminalManager == null) {
+                    initializeApp()
                 }
             }
         }
