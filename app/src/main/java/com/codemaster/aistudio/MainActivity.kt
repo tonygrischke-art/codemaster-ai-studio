@@ -366,7 +366,6 @@ class MainActivity : AppCompatActivity() {
             if (!permissionManager.hasAllPermissions()) {
                 val missing = permissionManager.getMissingPermissions()
                 if (missing.isNotEmpty()) {
-                    binding.apiKeyBanner.text = "⚠ Missing permissions: ${missing.joinToString(", ")}"
                     binding.apiKeyBanner.isVisible = true
                     binding.apiKeyBanner.setOnClickListener {
                         requestAllPermissions()
